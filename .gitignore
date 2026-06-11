@@ -1,0 +1,8 @@
+__pycache__/
+*.py[cod]
+.venv/
+venv/
+env/
+saved_drawings/*.png
+saved_drawings/*.jpg
+saved_drawings/*.jpeg
