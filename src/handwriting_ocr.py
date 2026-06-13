@@ -54,3 +54,32 @@ class HandwritingOCR:
         right = min(image_bgr.shape[1], x + w + pad)
         cropped = image_bgr[top:bottom, left:right]
         return cv2.resize(cropped, None, fx=1.6, fy=1.6, interpolation=cv2.INTER_CUBIC)
+
+    def copy_to_clipboard(self, text: str) -> bool:
+        if not text.strip():
+            return False
+        try:
+            import tkinter as tk
+            r = tk.Tk()
+            r.withdraw()
+            r.clipboard_clear()
+            r.clipboard_append(text)
+            r.update()
+            r.destroy()
+            return True
+        except Exception:
+            return False
+
+    def speak_text(self, text: str) -> None:
+        if not text.strip():
+            return
+        import threading
+        def _speak():
+            try:
+                import pyttsx3
+                engine = pyttsx3.init()
+                engine.say(text)
+                engine.runAndWait()
+            except Exception:
+                pass
+        threading.Thread(target=_speak, daemon=True).start()

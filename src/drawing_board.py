@@ -14,6 +14,15 @@ Color = Tuple[int, int, int]
 Point = Tuple[int, int]
 
 
+MENU_OPTIONS = (
+    ("draw", "Drawing"),
+    ("piano", "Piano"),
+    ("game", "Game"),
+    ("ocr", "OCR Mode"),
+    ("voice", "Voice Mode"),
+)
+
+
 @dataclass
 class Button:
     label: str
@@ -44,6 +53,10 @@ class DrawingBoard:
         self._rainbow_hue = 0
         self._last_action_frame: Dict[str, int] = {}
         self.buttons: List[Button] = []
+        self.undo_stack: List[Tuple[np.ndarray, np.ndarray]] = []
+        self.redo_stack: List[Tuple[np.ndarray, np.ndarray]] = []
+        self.max_undo = 20
+        self.show_color_menu = False
 
     @property
     def canvas(self) -> np.ndarray:
@@ -63,13 +76,44 @@ class DrawingBoard:
         self.prev_point = None
         self._build_toolbar()
 
+    def save_undo_state(self) -> None:
+        self.undo_stack.append((self.canvas.copy(), self.mask.copy()))
+        if len(self.undo_stack) > self.max_undo:
+            self.undo_stack.pop(0)
+        self.redo_stack.clear()
+
+    def undo(self) -> None:
+        if not self.undo_stack:
+            self.say("Nothing to undo")
+            return
+        self.redo_stack.append((self.canvas.copy(), self.mask.copy()))
+        prev_canvas, prev_mask = self.undo_stack.pop()
+        self.canvas[:] = prev_canvas
+        self.mask[:] = prev_mask
+        self.prev_point = None
+        self.say("Undo")
+
+    def redo(self) -> None:
+        if not self.redo_stack:
+            self.say("Nothing to redo")
+            return
+        self.undo_stack.append((self.canvas.copy(), self.mask.copy()))
+        next_canvas, next_mask = self.redo_stack.pop()
+        self.canvas[:] = next_canvas
+        self.mask[:] = next_mask
+        self.prev_point = None
+        self.say("Redo")
+
     def clear(self) -> None:
+        self.save_undo_state()
         self.canvas[:] = 0
         self.mask[:] = 0
         self.prev_point = None
         self.say("Board cleared")
 
     def new_page(self) -> None:
+        self.undo_stack.clear()
+        self.redo_stack.clear()
         self.pages.append(
             (
                 np.zeros((self.height, self.width, 3), dtype=np.uint8),
@@ -82,18 +126,23 @@ class DrawingBoard:
 
     def next_page(self) -> None:
         if self.page_index < len(self.pages) - 1:
+            self.undo_stack.clear()
+            self.redo_stack.clear()
             self.page_index += 1
             self.prev_point = None
             self.say(f"Page {self.page_index + 1}")
 
     def previous_page(self) -> None:
         if self.page_index > 0:
+            self.undo_stack.clear()
+            self.redo_stack.clear()
             self.page_index -= 1
             self.prev_point = None
             self.say(f"Page {self.page_index + 1}")
 
     def draw(self, point: Point, thickness: int) -> None:
         if self.prev_point is None:
+            self.save_undo_state()
             self.prev_point = point
             return
 
@@ -101,6 +150,8 @@ class DrawingBoard:
         self.prev_point = point
 
     def erase(self, point: Point, thickness: int) -> None:
+        if self.prev_point is None:
+            self.save_undo_state()
         radius = max(24, thickness * 3)
         cv2.line(self.canvas, self.prev_point or point, point, (0, 0, 0), radius)
         cv2.line(self.mask, self.prev_point or point, point, 0, radius)
@@ -110,6 +161,7 @@ class DrawingBoard:
         self.prev_point = None
 
     def draw_shape(self, shape: str, center: Point, size: int) -> None:
+        self.save_undo_state()
         color = self._active_color()
         thickness = max(2, size // 4)
         x, y = center
@@ -139,9 +191,56 @@ class DrawingBoard:
         self._draw_status(frame, gesture, brush_size)
         if cursor:
             cv2.circle(frame, cursor, max(5, brush_size // 2), self._active_color(), 2)
+        if self.show_color_menu:
+            self.draw_color_palette(frame, cursor)
         if self.message_frames > 0:
             self._draw_message(frame)
             self.message_frames -= 1
+
+    def draw_color_palette(self, frame: np.ndarray, cursor: Optional[Point]) -> Optional[str]:
+        cy, cx = frame.shape[0] // 2, frame.shape[1] // 2
+        radius = 45
+        import math
+        colors = [
+            ("Red", (0, 0, 255)),
+            ("Green", (0, 200, 0)),
+            ("Blue", (255, 90, 0)),
+            ("Purple", (255, 0, 255)),
+            ("Orange", (0, 165, 255)),
+            ("Black", (0, 0, 0)),
+        ]
+        
+        overlay = frame.copy()
+        cv2.rectangle(overlay, (cx - 320, cy - 120), (cx + 320, cy + 120), (20, 20, 25), -1)
+        cv2.addWeighted(overlay, 0.75, frame, 0.25, 0, frame)
+        cv2.rectangle(frame, (cx - 320, cy - 120), (cx + 320, cy + 120), (255, 255, 255), 2)
+        cv2.putText(frame, "SELECT COLOR (Right Index + Middle UP to Select)", (cx - 280, cy - 80), cv2.FONT_HERSHEY_SIMPLEX, 0.7, (255, 255, 255), 2, cv2.LINE_AA)
+        
+        spacing = 100
+        start_x = cx - (len(colors) - 1) * spacing // 2
+        
+        hovered_color_name = None
+        for i, (name, col) in enumerate(colors):
+            x = start_x + i * spacing
+            y = cy + 20
+            
+            hovered = False
+            if cursor:
+                dist = math.hypot(cursor[0] - x, cursor[1] - y)
+                if dist < radius:
+                    hovered = True
+                    hovered_color_name = name.lower()
+            
+            if hovered:
+                cv2.circle(frame, (x, y), radius + 8, (255, 255, 255), 2)
+                cv2.circle(frame, (x, y), radius, col, -1)
+            else:
+                cv2.circle(frame, (x, y), radius, col, -1)
+                cv2.circle(frame, (x, y), radius, (245, 245, 245), 1)
+                
+            cv2.putText(frame, name, (x - 24, y + radius + 25), cv2.FONT_HERSHEY_SIMPLEX, 0.48, (255, 255, 255), 1, cv2.LINE_AA)
+            
+        return hovered_color_name
 
     def handle_toolbar(self, point: Optional[Point], frame_number: int) -> Optional[str]:
         if point is None:
@@ -237,7 +336,11 @@ class DrawingBoard:
             self.mode = "draw"
             self.say("Draw mode")
         elif action == "ocr":
-            self.say("Press O for OCR")
+            self.mode = "ocr"
+            self.say("OCR mode")
+        elif action == "voice":
+            self.mode = "voice"
+            self.say("Voice mode")
         self.stop_stroke()
         return action
 
@@ -368,4 +471,146 @@ class DrawingBoard:
             "green": (0, 200, 0),
             "blue": (255, 90, 0),
             "black": (0, 0, 0),
+            "purple": (255, 0, 255),
+            "orange": (0, 165, 255),
         }
+
+    def draw_mode_menu(
+        self,
+        frame: np.ndarray,
+        cursor: Optional[Point],
+        selection: str,
+    ) -> None:
+        # 1. Dim background with a sleek dark slate color
+        overlay = frame.copy()
+        cv2.rectangle(overlay, (0, 0), (self.width, self.height), (12, 12, 18), -1)
+        cv2.addWeighted(overlay, 0.76, frame, 0.24, 0, frame)
+
+        # 2. Draw Title Header
+        title_y = max(80, int(self.height * 0.16))
+        # Draw a subtle neon accent line under title
+        cv2.line(frame, (50, title_y + 15), (self.width - 50, title_y + 15), (60, 60, 65), 1)
+        
+        cv2.putText(
+            frame,
+            "VIRTUAL GESTURE STUDIO",
+            (50, title_y),
+            cv2.FONT_HERSHEY_SIMPLEX,
+            1.1,
+            (255, 255, 255),
+            3,
+            cv2.LINE_AA,
+        )
+        
+        # 3. Mode Cards layout
+        box_y = max(140, int(self.height * 0.28))
+        box_h = max(240, int(self.height * 0.38))
+        gap = 36
+        box_w = max(260, (self.width - gap * (len(MENU_OPTIONS) + 1)) // len(MENU_OPTIONS))
+        total_width = len(MENU_OPTIONS) * box_w + (len(MENU_OPTIONS) - 1) * gap
+        start_x = max(24, (self.width - total_width) // 2)
+
+        for index, (mode, label) in enumerate(MENU_OPTIONS):
+            left = start_x + index * (box_w + gap)
+            right = left + box_w
+            bottom = box_y + box_h
+            highlighted = mode == selection
+            
+            # Draw Card Background
+            # Use semi-transparent overlay for card background to keep the modern look
+            card_overlay = frame.copy()
+            fill = (36, 36, 44) if not highlighted else (54, 42, 30)
+            cv2.rectangle(card_overlay, (left, box_y), (right, bottom), fill, -1)
+            # Add card background transparency
+            cv2.addWeighted(card_overlay, 0.85, frame, 0.15, 0, frame)
+
+            # Draw Card Border (Neon highlight if hovered)
+            border_color = (255, 140, 0) if highlighted else (80, 80, 90)  # Neon Orange / Slate Gray
+            border_thickness = 3 if highlighted else 1
+            cv2.rectangle(frame, (left, box_y), (right, bottom), border_color, border_thickness)
+
+            # Draw Mode Label
+            cv2.putText(
+                frame,
+                label,
+                (left + 24, box_y + 45),
+                cv2.FONT_HERSHEY_SIMPLEX,
+                0.9,
+                (255, 255, 255) if highlighted else (200, 200, 200),
+                2,
+                cv2.LINE_AA,
+            )
+
+            # Draw Subtitle/Description based on the mode
+            desc = ""
+            if mode == "draw":
+                desc = "Brush, Neon & Shapes"
+            elif mode == "piano":
+                desc = "Play virtual notes"
+            elif mode == "game":
+                desc = "Slice spawning fruits"
+                
+            cv2.putText(
+                frame,
+                desc,
+                (left + 24, box_y + 75),
+                cv2.FONT_HERSHEY_SIMPLEX,
+                0.48,
+                (200, 220, 255) if highlighted else (140, 140, 150),
+                1,
+                cv2.LINE_AA,
+            )
+
+            # Draw Mode Graphic/Icon inside the Card
+            graphic_y_center = box_y + box_h - 75
+            graphic_x_center = left + box_w // 2
+            
+            if mode == "draw":
+                # Draw small color palette circles (Red, Green, Blue)
+                r_c = (50, 50, 255)
+                g_c = (50, 200, 50)
+                b_c = (255, 100, 50)
+                # Drawing concentric rings if highlighted
+                if highlighted:
+                    cv2.circle(frame, (graphic_x_center - 40, graphic_y_center), 18, (255, 255, 255), 1)
+                    cv2.circle(frame, (graphic_x_center, graphic_y_center), 18, (255, 255, 255), 1)
+                    cv2.circle(frame, (graphic_x_center + 40, graphic_y_center), 18, (255, 255, 255), 1)
+                cv2.circle(frame, (graphic_x_center - 40, graphic_y_center), 14, r_c, -1)
+                cv2.circle(frame, (graphic_x_center, graphic_y_center), 14, g_c, -1)
+                cv2.circle(frame, (graphic_x_center + 40, graphic_y_center), 14, b_c, -1)
+                
+            elif mode == "piano":
+                # Draw 4 piano keys
+                key_width = 16
+                key_height = 45
+                start_k_x = graphic_x_center - (4 * key_width) // 2
+                start_k_y = graphic_y_center - key_height // 2
+                
+                # Draw white keys
+                for i in range(4):
+                    k_left = start_k_x + i * key_width
+                    k_right = k_left + key_width - 2
+                    k_fill = (255, 255, 255) if highlighted else (220, 220, 220)
+                    cv2.rectangle(frame, (k_left, start_k_y), (k_right, start_k_y + key_height), k_fill, -1)
+                    cv2.rectangle(frame, (k_left, start_k_y), (k_right, start_k_y + key_height), (40, 40, 40), 1)
+                # Draw black keys
+                for i in range(3):
+                    kb_left = start_k_x + i * key_width + key_width - key_width // 4
+                    kb_right = kb_left + key_width // 2
+                    cv2.rectangle(frame, (kb_left, start_k_y), (kb_right, start_k_y + int(key_height * 0.6)), (20, 20, 20), -1)
+
+            elif mode == "game":
+                # Draw sliced fruit graphic
+                fruit_color = (0, 165, 255) if highlighted else (0, 120, 200) # Orange-ish fruit
+                # Fruit circle
+                cv2.circle(frame, (graphic_x_center, graphic_y_center), 22, fruit_color, -1)
+                cv2.circle(frame, (graphic_x_center, graphic_y_center), 22, (255, 255, 255), 2)
+                # Diagonal slice line
+                cv2.line(frame, (graphic_x_center - 32, graphic_y_center + 18), (graphic_x_center + 32, graphic_y_center - 18), (255, 255, 255), 2)
+
+        # 4. Draw pointer/cursor with glowing halo when active
+        if cursor:
+            # outer glow ring
+            cv2.circle(frame, cursor, 22, (255, 140, 0), 1)
+            cv2.circle(frame, cursor, 14, (255, 255, 255), 2)
+            cv2.circle(frame, cursor, 5, (255, 255, 255), -1)
