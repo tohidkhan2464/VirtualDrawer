@@ -8,7 +8,6 @@ import math
 import cv2
 import numpy as np
 
-
 Point = Tuple[int, int]
 
 
@@ -43,19 +42,30 @@ class VirtualPiano:
         self.last_note: Optional[str] = None
         self.cooldown = 0
         self.enabled = False
+        self.width = 0
+        self.height = 0
         self.sounds: Dict[str, object] = {}
         self.message = ""
-        
+        self.volume = 0.7
+
         self.octave_offset = 0
         self.instruments = ["Classic", "Organ", "Retro", "Triangle"]
         self.instrument_index = 0
         self.active_channels: Dict[str, object] = {}
         self.sustain = False
-        
+
         self._init_audio()
 
+    def scale(self, value: int) -> int:
+        base_w = 1920
+        base_h = 1080
+        sx = self.width / base_w
+        sy = self.height / base_h
+        scale = min(sx, sy)
+        return max(1, int(value * scale))
+
     def ensure_layout(self, width: int, height: int) -> None:
-        piano_height = 118  
+        piano_height = 100
 
         top = (height - piano_height) // 2
         bottom = top + piano_height
@@ -67,9 +77,7 @@ class VirtualPiano:
         for index, note in enumerate(self.NOTES):
             left = margin + index * key_w
             right = left + key_w - 4
-
             color = (245, 245, 245) if index % 2 == 0 else (230, 230, 230)
-
             self.keys.append(
                 PianoKey(
                     note,
@@ -81,6 +89,94 @@ class VirtualPiano:
     def draw(self, frame: np.ndarray, cursor: Optional[Point]) -> None:
         if not self.keys:
             self.ensure_layout(frame.shape[1], frame.shape[0])
+
+        # # translucent top HUD
+        # hud = frame.copy()
+        # cv2.rectangle(hud, (20, 20), (520, 140), (25, 25, 25), -1)
+        # cv2.addWeighted(hud, 0.55, frame, 0.45, 0, frame)
+        # cv2.rectangle(frame, (20, 20), (520, 140), (255, 255, 255), 2)
+
+        # Draw Title
+        cv2.putText(
+            frame,
+            "Virtual Piano",
+            (40, 55),
+            cv2.FONT_HERSHEY_DUPLEX,
+            0.9,
+            (255, 255, 255),
+            2,
+        )
+
+        # Draw Volume Bar
+        bar_x = 240
+        bar_y = 45
+        bar_w = 180
+        bar_h = 16
+        cv2.putText(
+            frame,
+            "Volume",
+            (bar_x, 30),
+            cv2.FONT_HERSHEY_SIMPLEX,
+            0.5,
+            (200, 200, 200),
+            1,
+        )
+        cv2.rectangle(
+            frame, (bar_x, bar_y), (bar_x + bar_w, bar_y + bar_h), (80, 80, 80), -1
+        )
+        fill = int(bar_w * self.volume)
+        cv2.rectangle(
+            frame, (bar_x, bar_y), (bar_x + fill, bar_y + bar_h), (0, 220, 0), -1
+        )
+        cv2.rectangle(
+            frame, (bar_x, bar_y), (bar_x + bar_w, bar_y + bar_h), (255, 255, 255), 1
+        )
+
+        # Draw Instrument
+        x = 35
+        y = 90
+        for i, name in enumerate(self.instruments):
+            active = i == self.instrument_index
+            bg = (40, 180, 40) if active else (55, 55, 55)
+            text = (255, 255, 255) if active else (180, 180, 180)
+            w = cv2.getTextSize(name, cv2.FONT_HERSHEY_SIMPLEX, 0.55, 1)[0][0] + 24
+            cv2.rectangle(frame, (x, y), (x + w, y + 34), bg, -1)
+            cv2.putText(
+                frame, name, (x + 12, y + 23), cv2.FONT_HERSHEY_SIMPLEX, 0.55, text, 1
+            )
+            x += w + 12
+        # Draw Gesture Guide
+        controls = [
+            ("Fist", "Vol-"),
+            ("Palm", "Vol+"),
+            ("Index", "Oct+"),
+            ("Pinky", "Oct-"),
+            ("Rock", "Inst"),
+        ]
+        x = 30
+        y = 145
+        for g, a in controls:
+            cv2.rectangle(frame, (x, y), (x + 95, y + 38), (45, 45, 45), -1)
+            cv2.rectangle(frame, (x, y), (x + 95, y + 38), (120, 120, 120), 1)
+            cv2.putText(
+                frame,
+                g,
+                (x + 10, y + 16),
+                cv2.FONT_HERSHEY_SIMPLEX,
+                0.45,
+                (0, 255, 255),
+                1,
+            )
+            cv2.putText(
+                frame,
+                a,
+                (x + 10, y + 32),
+                cv2.FONT_HERSHEY_SIMPLEX,
+                0.5,
+                (255, 255, 255),
+                1,
+            )
+            x += 105
 
         overlay = frame.copy()
         for key in self.keys:
@@ -94,44 +190,39 @@ class VirtualPiano:
         for key in self.keys:
             left, top, right, bottom = key.rect
             cv2.rectangle(frame, (left, top), (right, bottom), (30, 30, 30), 2)
-            cv2.putText(frame, key.note, (left + 18, bottom - 28), cv2.FONT_HERSHEY_SIMPLEX, 0.8, (20, 20, 20), 2, cv2.LINE_AA)
-        piano_top = self.keys[0].rect[1]
-
-        # Draw current instrument, octave, and sustain status on HUD
-        inst_text = f"Inst: {self.instruments[self.instrument_index]} | Octave: {self.octave_offset:+d} | Sustain: {'ON' if self.sustain else 'OFF'}"
-        cv2.putText(
-            frame,
-            f"Virtual Piano - {inst_text}",
-            (28, piano_top - 20),
-            cv2.FONT_HERSHEY_SIMPLEX,
-            0.75,
-            (255, 255, 255),
-            2,
-            cv2.LINE_AA,
-        )
-        if self.message:
             cv2.putText(
                 frame,
-                self.message,
-                (28, piano_top - 40),
+                key.note,
+                (left + 18, bottom - 28),
                 cv2.FONT_HERSHEY_SIMPLEX,
-                0.55,
-                (180, 255, 255),
-                1,
+                0.8,
+                (20, 20, 20),
+                2,
                 cv2.LINE_AA,
             )
+        if self.last_note:
+            txt = f"{self.last_note}"
+            size = cv2.getTextSize(txt, cv2.FONT_HERSHEY_DUPLEX, 1.2, 2)[0]
+            x = frame.shape[1] // 2 - size[0] // 2
+            y = frame.shape[0] - 40
+            cv2.putText(
+                frame, txt, (x, y), cv2.FONT_HERSHEY_DUPLEX, 1.2, (0, 255, 255), 2
+            )
 
-    def touch(self, point: Optional[Point], sustain_active: bool = False) -> Optional[str]:
+    def touch(
+        self, point: Optional[Point], sustain_active: bool = False
+    ) -> Optional[str]:
         if self.cooldown > 0:
             self.cooldown -= 1
-            
+
         self.sustain = sustain_active
-        
+
         touched_note = None
         if point is not None:
             for key in self.keys:
                 if key.contains(point):
                     touched_note = key.note
+
                     break
 
         if touched_note:
@@ -171,12 +262,20 @@ class VirtualPiano:
             return
         try:
             import pygame
-            factor = 2.0 ** self.octave_offset
+
+            factor = 2.0**self.octave_offset
             for note in self.NOTES:
                 freq = self.FREQUENCIES[note] * factor
                 self.sounds[note] = self._generate_instrument_tone(pygame, freq)
+                self.sounds[note].set_volume(self.volume)
         except Exception as exc:
             self.message = f"Re-gen failed: {exc}"
+
+    def set_volume(self, delta: float):
+        self.volume = max(0.0, min(1.0, self.volume + delta))
+        for sound in self.sounds.values():
+            sound.set_volume(self.volume)
+        self.message = f"Volume: {int(self.volume * 100)}%"
 
     def _init_audio(self) -> None:
         try:
@@ -191,8 +290,12 @@ class VirtualPiano:
             pygame.mixer.init(frequency=44100, size=-16, channels=2)
             pygame.mixer.set_num_channels(16)
             for note in self.NOTES:
-                self.sounds[note] = self._generate_instrument_tone(pygame, self.FREQUENCIES[note])
+                self.sounds[note] = self._generate_instrument_tone(
+                    pygame, self.FREQUENCIES[note]
+                )
             self.enabled = True
+            for sound in self.sounds.values():
+                sound.set_volume(self.volume)
         except Exception as exc:  # pragma: no cover - audio device dependent
             self.enabled = False
             self.message = f"Audio unavailable: {exc}"
@@ -208,21 +311,27 @@ class VirtualPiano:
             wave = np.sin(2.0 * np.pi * freq * t) * envelope
         elif inst == "Organ":
             envelope = np.exp(-1.2 * t)
-            wave = (np.sin(2.0 * np.pi * freq * t) +
-                    0.5 * np.sin(4.0 * np.pi * freq * t) +
-                    0.25 * np.sin(6.0 * np.pi * freq * t)) * envelope
+            wave = (
+                np.sin(2.0 * np.pi * freq * t)
+                + 0.5 * np.sin(4.0 * np.pi * freq * t)
+                + 0.25 * np.sin(6.0 * np.pi * freq * t)
+            ) * envelope
             wave = wave / 1.75
         elif inst == "Retro":
             envelope = np.exp(-4.0 * t)
             wave = np.sign(np.sin(2.0 * np.pi * freq * t)) * envelope
         elif inst == "Triangle":
             envelope = np.exp(-2.0 * t)
-            wave = (2.0 * np.abs(2.0 * (t * freq - np.floor(t * freq + 0.5))) - 1.0) * envelope
+            wave = (
+                2.0 * np.abs(2.0 * (t * freq - np.floor(t * freq + 0.5))) - 1.0
+            ) * envelope
         else:
             envelope = np.exp(-3.0 * t)
             wave = np.sin(2.0 * np.pi * freq * t) * envelope
 
+        wave /= np.max(np.abs(wave))
         audio = (wave * 32767).astype(np.int16)
+        audio = np.column_stack((audio, audio))
         return pygame.sndarray.make_sound(audio)
 
     def _play(self, note: str) -> None:

@@ -10,18 +10,29 @@ from src.hand_tracker import HandResult
 @dataclass
 class GestureState:
     # Right hand (Action)
-    name: str  # "none", "draw", "move", "select", "return", "pinch"
-    cursor: Optional[Tuple[int, int]]
     fingers: Dict[str, bool]
     pinch_distance: float
     brush_size: int
 
-    # Left hand (Modifier)
-    left_name: str  # "none", "open_palm", "fist", "thumb_up", "pinky_up", "rock", "color_menu", "pinch"
+    # Left hand
+    left_name: str
+    # "none", "menu_cursor", "menu_select", "menu_return",
+    # "open_hand", "four_fingers_up", "closed_fist",
+    # "thumb_up", "pinky_up", "rock", "color_menu", "pinch"    
     left_cursor: Optional[Tuple[int, int]]
     left_fingers: Dict[str, bool]
     left_pinch_distance: float
     left_pinch_brush_size: int
+
+    # Right hand
+    right_name: str
+    # "none", "draw", "select", "return",
+    # "open_hand", "four_fingers_up", "closed_fist",
+    # "pinky_up", "color_menu", "pinch", "move"
+    right_cursor: Optional[Tuple[int, int]]
+    right_fingers: Dict[str, bool]
+    right_pinch_distance: float
+    right_brush_size: int
 
     # Two-handed gesture
     two_handed_name: str  # "none", "both_open_palms", "both_thumbs_up"
@@ -66,18 +77,63 @@ class GestureDetector:
             right_fingers = self._finger_states(right_hand)
             right_cursor = (lm[8][0], lm[8][1])
             thumb_tip = (lm[4][0], lm[4][1])
-            right_pinch = hypot(right_cursor[0] - thumb_tip[0], right_cursor[1] - thumb_tip[1])
+            right_pinch = hypot(
+                right_cursor[0] - thumb_tip[0], right_cursor[1] - thumb_tip[1]
+            )
             right_brush = self._pinch_to_brush_size(right_pinch)
 
             # Determine Right hand gesture
-            if right_fingers["index"] and not any(right_fingers[f] for f in ("middle", "ring", "pinky")):
+            if right_fingers["index"] and not any(
+                right_fingers[f] for f in ("middle", "ring", "pinky")
+            ):
                 right_name = "draw"
-            elif right_fingers["index"] and right_fingers["middle"] and not any(right_fingers[f] for f in ("ring", "pinky")):
+            elif (
+                right_fingers["index"]
+                and right_fingers["middle"]
+                and not any(right_fingers[f] for f in ("ring", "pinky"))
+            ):
                 right_name = "select"
-            elif right_fingers["index"] and right_fingers["middle"] and right_fingers["ring"] and not right_fingers["pinky"]:
-                right_name = "return"
-            elif right_pinch < 40:  # Threshold for pinch
+            elif (
+                right_fingers["index"]
+                and right_fingers["middle"]
+                and right_fingers["ring"]
+                and not right_fingers["pinky"]
+            ):
+                right_name = "color_menu"
+            elif right_pinch < 40:
                 right_name = "pinch"
+            elif (
+                right_fingers["pinky"]
+                and not right_fingers["index"]
+                and not right_fingers["middle"]
+                and not right_fingers["ring"]
+            ):
+                right_name = "pinky_up"
+
+            # elif (
+            #     right_fingers["index"]
+            #     and right_fingers["middle"]
+            #     and right_fingers["pinky"]
+            #     and not right_fingers["ring"]
+            # ):
+            #     right_name = "color_menu"
+            # All five fingers
+            elif all(right_fingers.values()):
+                right_name = "open_hand"
+
+            # Four fingers (thumb folded)
+            elif (
+                right_fingers["index"]
+                and right_fingers["middle"]
+                and right_fingers["ring"]
+                and right_fingers["pinky"]
+                and not right_fingers["thumb"]
+            ):
+                right_name = "four_fingers_up"
+
+            # Closed fist
+            elif not any(right_fingers.values()):
+                right_name = "closed_fist"
             else:
                 right_name = "move"
 
@@ -93,21 +149,73 @@ class GestureDetector:
             left_fingers = self._finger_states(left_hand)
             left_cursor = (lm[8][0], lm[8][1])
             thumb_tip = (lm[4][0], lm[4][1])
-            left_pinch = hypot(left_cursor[0] - thumb_tip[0], left_cursor[1] - thumb_tip[1])
+            left_pinch = hypot(
+                left_cursor[0] - thumb_tip[0], left_cursor[1] - thumb_tip[1]
+            )
             left_brush = self._pinch_to_brush_size(left_pinch)
 
             # Determine Left hand gesture
-            if all(left_fingers[f] for f in ("index", "middle", "ring", "pinky")):
-                left_name = "open_palm"
+            # Left Index only -> move cursor
+            if (
+                left_fingers["index"]
+                and not left_fingers["middle"]
+                and not left_fingers["ring"]
+                and not left_fingers["pinky"]
+            ):
+                left_name = "menu_cursor"
+
+            # Left Index + Middle -> select
+            elif (
+                left_fingers["index"]
+                and left_fingers["middle"]
+                and not left_fingers["ring"]
+                and not left_fingers["pinky"]
+            ):
+                left_name = "menu_select"
+
+            # Left Index + Middle + Ring -> return/open menu
+            elif (
+                left_fingers["index"]
+                and left_fingers["middle"]
+                and left_fingers["ring"]
+                and not left_fingers["pinky"]
+            ):
+                left_name = "menu_return"
+
+            elif (
+                left_fingers["index"]
+                and left_fingers["middle"]
+                and left_fingers["ring"]
+                and left_fingers["pinky"]
+                and not left_fingers["thumb"]
+            ):
+                left_name = "four_fingers_up"
+            elif all(left_fingers.values()):
+                left_name = "open_hand"
+
             elif not any(left_fingers.values()):
-                left_name = "fist"
-            elif left_fingers["thumb"] and not any(left_fingers[f] for f in ("index", "middle", "ring", "pinky")):
+                left_name = "closed_fist"
+            elif left_fingers["thumb"] and not any(
+                left_fingers[f] for f in ("index", "middle", "ring", "pinky")
+            ):
                 left_name = "thumb_up"
-            elif left_fingers["pinky"] and not any(left_fingers[f] for f in ("thumb", "index", "middle", "ring")):
+            elif left_fingers["pinky"] and not any(
+                left_fingers[f] for f in ("thumb", "index", "middle", "ring")
+            ):
                 left_name = "pinky_up"
-            elif left_fingers["index"] and left_fingers["pinky"] and not left_fingers["middle"] and not left_fingers["ring"]:
+            elif (
+                left_fingers["index"]
+                and left_fingers["pinky"]
+                and not left_fingers["middle"]
+                and not left_fingers["ring"]
+            ):
                 left_name = "rock"
-            elif left_fingers["index"] and left_fingers["middle"] and left_fingers["pinky"] and not left_fingers["ring"]:
+            elif (
+                left_fingers["index"]
+                and left_fingers["middle"]
+                and left_fingers["pinky"]
+                and not left_fingers["ring"]
+            ):
                 left_name = "color_menu"
             elif left_pinch < 40:
                 left_name = "pinch"
@@ -115,23 +223,35 @@ class GestureDetector:
         # 4. Determine Two-Handed Gestures
         two_handed_name = "none"
         if right_hand and left_hand:
-            if right_name == "draw" and left_name == "open_palm":
+            if right_name == "draw" and left_name == "four_fingers_up":
                 # Let open palm on left hand modify right index draw
                 pass
-            
+
             # Both Hands Open Palm -> Clear
-            if all(right_fingers[f] for f in ("index", "middle", "ring", "pinky")) and all(left_fingers[f] for f in ("index", "middle", "ring", "pinky")):
+            if all(
+                right_fingers[f] for f in ("index", "middle", "ring", "pinky")
+            ) and all(left_fingers[f] for f in ("index", "middle", "ring", "pinky")):
                 two_handed_name = "both_open_palms"
             # Both Thumbs Up -> Save / Restart
-            elif right_fingers["thumb"] and not any(right_fingers[f] for f in ("index", "middle", "ring", "pinky")) and left_fingers["thumb"] and not any(left_fingers[f] for f in ("index", "middle", "ring", "pinky")):
+            elif (
+                right_fingers["thumb"]
+                and not any(
+                    right_fingers[f] for f in ("index", "middle", "ring", "pinky")
+                )
+                and left_fingers["thumb"]
+                and not any(left_fingers[f] for f in ("index", "middle", "ring", "pinky"))
+            ):
                 two_handed_name = "both_thumbs_up"
 
         return GestureState(
-            name=right_name,
-            cursor=right_cursor,
             fingers=right_fingers,
             pinch_distance=right_pinch,
             brush_size=right_brush,
+            right_name=right_name,
+            right_cursor=right_cursor,
+            right_fingers=right_fingers,
+            right_pinch_distance=right_pinch,
+            right_brush_size=right_brush,
             left_name=left_name,
             left_cursor=left_cursor,
             left_fingers=left_fingers,

@@ -7,7 +7,8 @@ from typing import Optional
 
 import cv2
 
-from src.drawing_board import DrawingBoard, MENU_OPTIONS
+from src.menu_selection import MenuSelection, MENU_OPTIONS
+from src.drawing_canvas import DrawingCanvas
 from src.fruit_ninja import FruitNinjaMiniGame
 from src.gesture_detector import GestureDetector, GestureState
 from src.hand_tracker import HandTracker
@@ -21,11 +22,9 @@ def parse_args() -> argparse.Namespace:
         description="Virtual Drawing Board using Hand Gestures"
     )
     parser.add_argument("--camera", type=int, default=0, help="Webcam device index")
+    parser.add_argument("--width", type=int, default=1920, help="Requested camera width")
     parser.add_argument(
-        "--width", type=int, default=1280, help="Requested camera width"
-    )
-    parser.add_argument(
-        "--height", type=int, default=720, help="Requested camera height"
+        "--height", type=int, default=1080, help="Requested camera height"
     )
     parser.add_argument(
         "--no-landmarks", action="store_true", help="Hide MediaPipe hand landmarks"
@@ -35,6 +34,15 @@ def parse_args() -> argparse.Namespace:
 
 def main() -> None:
     args = parse_args()
+    cv2.namedWindow("Virtual Gesture Studio", cv2.WINDOW_NORMAL)
+    cv2.setWindowProperty(
+        "Virtual Gesture Studio",
+        cv2.WND_PROP_FULLSCREEN,
+        cv2.WINDOW_NORMAL,
+    )
+
+    cv2.namedWindow("Virtual Gesture Studio", cv2.WINDOW_NORMAL)
+    cv2.resizeWindow("Virtual Gesture Studio", 1920, 1080)
     cap = cv2.VideoCapture(args.camera)
     cap.set(cv2.CAP_PROP_FRAME_WIDTH, args.width)
     cap.set(cv2.CAP_PROP_FRAME_HEIGHT, args.height)
@@ -45,7 +53,10 @@ def main() -> None:
     # Explicitly track up to 2 hands
     tracker = HandTracker(max_hands=2)
     detector = GestureDetector()
-    board = DrawingBoard()
+    # board = DrawingBoard()
+    menu = MenuSelection()
+    canvas = DrawingCanvas()
+
     piano = VirtualPiano()
     game = FruitNinjaMiniGame()
     ocr = HandwritingOCR()
@@ -71,6 +82,7 @@ def main() -> None:
     pinch_start_brush = 8
 
     # Octave/Instrument cooldowns
+    last_volume_change_time = 0.0
     last_octave_change_time = 0.0
     last_instrument_change_time = 0.0
 
@@ -90,12 +102,13 @@ def main() -> None:
         while True:
             ok, frame = cap.read()
             if not ok:
-                board.say("Camera frame unavailable")
+                menu.say("Camera frame unavailable")
                 continue
 
             frame = cv2.flip(frame, 1)
             height, width = frame.shape[:2]
-            board.ensure_size(width, height)
+            menu.ensure_size(width, height)
+            canvas.ensure_size(width, height)
             piano.ensure_layout(width, height)
             frame_number += 1
 
@@ -103,34 +116,34 @@ def main() -> None:
             hands = tracker.process(frame)
             state = detector.detect(hands)
 
-            # Global Idle Timer: returns to menu after 3 seconds of no hands
+            # Global Idle Timer: returns to menu after 10 seconds of no hands
             now = time.time()
             if hands:
                 last_hand_seen_time = now
                 idle_active = False
             else:
-                idle_active = (now - last_hand_seen_time) > 3.0
+                idle_active = (now - last_hand_seen_time) > 10.0
 
             if idle_active:
-                if app_state != "menu" or board.mode != "draw":
+                if app_state != "menu":
                     app_state = "menu"
-                    board.mode = "draw"
-                    board.stop_stroke()
-                    board.say("System Idle", frames=120)
+                    # menu.set_mode("draw")
+                    # menu.stop_stroke()
+                    menu.say("System Idle", frames=120)
 
             if not args.no_landmarks:
                 tracker.draw_landmarks(frame, hands)
 
             # Compose output frame (merge canvas layer)
-            output = board.compose(frame)
+            output = canvas.compose(frame)
 
             # Define active hold gestures for timing
             active_gestures = []
-            if state.left_name == "fist":
+            if state.left_name == "closed_fist":
                 active_gestures.append("left_fist")
             if state.left_name == "thumb_up":
                 active_gestures.append("left_thumb_up")
-            if state.left_name == "open_palm":
+            if state.left_name == "four_fingers_up":
                 active_gestures.append("left_open_palm")
             if state.left_name == "pinky_up":
                 active_gestures.append("left_pinky_up")
@@ -154,135 +167,190 @@ def main() -> None:
             if not idle_active:
                 # ------------------- STATE: MENU -------------------
                 if app_state == "menu":
-                    board.stop_stroke()
-                    # Point with Right Index
-                    if state.cursor:
-                        menu_cursor = state.cursor
+                    canvas.stop_stroke()
+
+                    # Point with LEFT Index
+                    if state.left_cursor:
+                        menu_cursor = state.left_cursor
                         menu_selection = _menu_selection_for_cursor(menu_cursor, width)
                     else:
                         menu_cursor = None
 
-                    # Select with Right Index + Middle UP
-                    if state.name == "select":
-                        _activate_mode(board, menu_selection, game)
+                    # Select with LEFT Index + Middle
+                    if state.left_name == "menu_select":
+                        _activate_mode(canvas, menu, menu_selection, game)
                         app_state = "active"
-                        board.say(f"{menu_selection.upper()} mode")
+                        menu.say(f"{menu_selection.upper()} mode")
 
                 # ------------------- STATE: ACTIVE -------------------
                 else:
                     # Return to Mode Menu with Right Index + Middle + Ring UP
-                    if state.name == "return":
+                    if state.left_name == "menu_return":
                         app_state = "menu"
-                        board.mode = "draw"
-                        board.stop_stroke()
-                        board.say("Mode menu")
+                        # board.set_mode("draw")
+                        canvas.stop_stroke()
+                        menu.say("Mode menu")
                         menu_cursor = None
                     else:
                         # 1. Mode: Drawing Board
-                        if board.mode in ("draw", "eraser"):
+                        if menu.mode == "draw":
                             # Left Fist -> Undo (0.8s hold)
-                            if "left_fist" in gesture_start_times and not gesture_triggered.get("left_fist", True):
+                            if (
+                                "left_fist" in gesture_start_times
+                                and not gesture_triggered.get("left_fist", True)
+                            ):
                                 if now - gesture_start_times["left_fist"] >= 0.8:
-                                    board.undo()
+                                    canvas.undo()
                                     gesture_triggered["left_fist"] = True
 
                             # Left Thumb UP -> Redo (0.8s hold)
-                            if "left_thumb_up" in gesture_start_times and not gesture_triggered.get("left_thumb_up", True):
+                            if (
+                                "left_thumb_up" in gesture_start_times
+                                and not gesture_triggered.get("left_thumb_up", True)
+                            ):
                                 if now - gesture_start_times["left_thumb_up"] >= 0.8:
-                                    board.redo()
+                                    canvas.redo()
                                     gesture_triggered["left_thumb_up"] = True
 
                             # Both Open Palms -> Clear (2.0s hold)
-                            if "both_open_palms" in gesture_start_times and not gesture_triggered.get("both_open_palms", True):
+                            if (
+                                "both_open_palms" in gesture_start_times
+                                and not gesture_triggered.get("both_open_palms", True)
+                            ):
                                 if now - gesture_start_times["both_open_palms"] >= 2.0:
-                                    board.clear()
+                                    canvas.clear()
                                     gesture_triggered["both_open_palms"] = True
 
                             # Both Thumbs Up -> Save (1.0s hold)
-                            if "both_thumbs_up" in gesture_start_times and not gesture_triggered.get("both_thumbs_up", True):
+                            if (
+                                "both_thumbs_up" in gesture_start_times
+                                and not gesture_triggered.get("both_thumbs_up", True)
+                            ):
                                 if now - gesture_start_times["both_thumbs_up"] >= 1.0:
-                                    board.save()
+                                    canvas.save()
                                     gesture_triggered["both_thumbs_up"] = True
 
-                            # Left Pinky UP -> Toggle Eraser
-                            if state.left_name == "pinky_up":
+                            # Right Pinky UP -> Toggle Eraser
+                            if state.right_name == "pinky_up":
                                 if not pinky_toggled:
-                                    if board.mode == "eraser":
-                                        board.mode = "draw"
-                                        board.say("Drawing Mode")
+                                    if canvas.tool == "eraser":
+                                        canvas.tool = "pencil"
+                                        menu.say("Drawing Mode")
                                     else:
-                                        board.mode = "eraser"
-                                        board.say("Eraser Mode")
+                                        canvas.tool = "eraser"
+                                        menu.say("Eraser Mode")
                                     pinky_toggled = True
                             else:
                                 pinky_toggled = False
 
-                            # Left Pinch -> Brush size control
-                            if state.left_name == "pinch":
+                            # Right Pinch -> Brush size control
+                            if state.right_name == "pinch":
                                 if not pinch_started:
-                                    pinch_start_dist = state.left_pinch_distance
+                                    pinch_start_dist = state.right_pinch_distance
                                     pinch_start_brush = current_brush_size
                                     pinch_started = True
                                 else:
-                                    diff = state.left_pinch_distance - pinch_start_dist
-                                    current_brush_size = max(board.min_brush, min(board.max_brush, int(pinch_start_brush + diff * 0.2)))
+                                    diff = state.right_pinch_distance - pinch_start_dist
+                                    current_brush_size = max(
+                                        canvas.min_brush,
+                                        min(
+                                            canvas.max_brush,
+                                            int(pinch_start_brush + diff * 0.2),
+                                        ),
+                                    )
                             else:
                                 pinch_started = False
 
-                            # Left Color Menu Pop-up (Index + Middle + Pinky)
-                            board.show_color_menu = (state.left_name == "color_menu")
-                            if board.show_color_menu:
-                                hovered_color = board.draw_color_palette(output, state.cursor)
-                                if hovered_color and state.name == "select":
-                                    board.color = board._color_actions().get(hovered_color, board.color)
-                                    board.effect = "normal"
-                                    board.mode = "draw"
-                                    board.show_color_menu = False
-                                    board.say(f"{hovered_color.title()} selected")
+                            # Right Color Menu Pop-up (Index + Middle + Pinky)
+                            if state.right_name == "color_menu":
+                                canvas.show_color_menu = True
+
+                            # Draw palette whenever it is open
+                            if canvas.show_color_menu:
+                                hovered_color = canvas.draw_color_palette(
+                                    output,
+                                    state.right_cursor,
+                                )
+
+                                # Select using Index + Middle
+                                if hovered_color and state.right_name == "select":
+                                    canvas.color = canvas._color_actions()[hovered_color]
+                                    canvas.effect = "normal"
+                                    canvas.tool = "pencil"
+
+                                    canvas.show_color_menu = False
+                                    menu.say(f"{hovered_color.title()} selected")
 
                             # Handle Toolbar Button Clicks
-                            action = board.handle_toolbar(state.cursor, frame_number)
+                            action = canvas.handle_toolbar(
+                                state.right_cursor, frame_number
+                            )
                             if action:
                                 if action == "game":
                                     game.reset()
-                                board.stop_stroke()
+                                canvas.stop_stroke()
 
                             # Draw or Erase
-                            if not board.show_color_menu and not action:
-                                _draw_or_erase(board, state, current_brush_size)
+                            if not canvas.show_color_menu and not action:
+                                _draw_or_erase(canvas, state, current_brush_size)
 
                         # 2. Mode: Virtual Piano
-                        elif board.mode == "piano":
-                            board.stop_stroke()
+                        elif menu.mode == "piano":
+                            menu.set_mode("piano")
+                            canvas.stop_stroke()
                             # Sustain pedal (Left Hand Open Palm)
-                            sustain = (state.left_name == "open_palm")
-                            piano.touch(state.cursor, sustain_active=sustain)
+                            sustain = state.left_name == "four_fingers_up"
+                            piano.touch(state.right_cursor, sustain_active=sustain)
 
-                            # Octave Up (Left Hand Thumb UP, cooldown 1s)
-                            if state.left_name == "thumb_up":
-                                if now - last_octave_change_time > 1.0:
-                                    piano.change_octave(1)
+                            # ---------------- Volume ----------------
+
+                            # Left Index -> Volume +
+                            if state.left_name == "four_fingers_up":
+                                if now - last_volume_change_time > 0.5:
+                                    piano.set_volume(+0.1)
+                                    menu.say(f"Volume {int(piano.volume*100)}%")
+                                    last_volume_change_time = now
+
+                            # Left Fist -> Volume -
+                            elif state.left_name == "closed_fist":
+                                if now - last_volume_change_time > 0.5:
+                                    piano.set_volume(-0.1)
+                                    menu.say(f"Volume {int(piano.volume*100)}%")
+                                    last_volume_change_time = now
+
+                            # ---------------- Octave ----------------
+
+                            # Thumb Up
+                            elif state.left_name == "menu_cursor":
+                                if now - last_octave_change_time > 1:
+                                    piano.change_octave(+1)
+                                    menu.say(f"Octave {piano.octave_offset:+d}")
                                     last_octave_change_time = now
-                                    board.say(f"Octave: {piano.octave_offset:+d}")
-                            # Octave Down (Left Hand Pinky UP, cooldown 1s)
+
+                            # Pinky Up
                             elif state.left_name == "pinky_up":
-                                if now - last_octave_change_time > 1.0:
+                                if now - last_octave_change_time > 1:
                                     piano.change_octave(-1)
+                                    menu.say(f"Octave {piano.octave_offset:+d}")
                                     last_octave_change_time = now
-                                    board.say(f"Octave: {piano.octave_offset:+d}")
 
-                            # Instrument Change (Left Hand Rock Sign, cooldown 1s)
-                            if state.left_name == "rock":
-                                if now - last_instrument_change_time > 1.0:
+                            # ---------------- Instrument ----------------
+
+                            elif state.left_name == "rock":
+                                if now - last_instrument_change_time > 1:
                                     piano.next_instrument()
+                                    menu.say(piano.instruments[piano.instrument_index])
                                     last_instrument_change_time = now
-                                    board.say(f"Instrument: {piano.instruments[piano.instrument_index]}")
 
                         # 3. Mode: Fruit Ninja
-                        elif board.mode == "game":
-                            board.stop_stroke()
+                        elif menu.mode == "game":
+                            canvas.stop_stroke()
+                            menu.set_mode("game")
                             # Restart Game (Both Thumbs Up held for 2.0s)
-                            if "both_thumbs_up" in gesture_start_times and not gesture_triggered.get("both_thumbs_up", True):
+                            if (
+                                "both_thumbs_up" in gesture_start_times
+                                and not gesture_triggered.get("both_thumbs_up", True)
+                            ):
                                 if now - gesture_start_times["both_thumbs_up"] >= 2.0:
                                     game.reset()
                                     gesture_triggered["both_thumbs_up"] = True
@@ -291,21 +359,31 @@ def main() -> None:
                             game.update(
                                 width,
                                 height,
-                                cutter=state.cursor if state.name == "draw" else None,
-                                shield_pressed=(state.left_name == "fist"),
-                                slow_mo_pressed=(state.left_name == "open_palm")
+                                cutter=(
+                                    state.right_cursor
+                                    if state.right_name == "draw"
+                                    else None
+                                ),
+                                shield_pressed=(state.left_name == "closed_fist"),
+                                slow_mo_pressed=(state.left_name == "four_fingers_up"),
                             )
 
                         # 4. Mode: Handwriting OCR
-                        elif board.mode == "ocr":
+                        elif menu.mode == "ocr":
+                            menu.set_mode("ocr")
                             # Draw strokes inside the OCR area
-                            _draw_or_erase(board, state, current_brush_size)
+                            _draw_or_erase(canvas, state, current_brush_size)
 
                             # Start Recognition (Left Open Palm held for 1.0s)
-                            if "left_open_palm" in gesture_start_times and not gesture_triggered.get("left_open_palm", True):
+                            if (
+                                "left_open_palm" in gesture_start_times
+                                and not gesture_triggered.get("left_open_palm", True)
+                            ):
                                 if now - gesture_start_times["left_open_palm"] >= 1.0:
-                                    results, msg = ocr.recognize(board.get_page_on_white())
-                                    board.say(msg, frames=150)
+                                    results, msg = ocr.recognize(
+                                        canvas.get_page_on_white()
+                                    )
+                                    menu.say(msg, frames=150)
                                     ocr_text_result = " ".join(r.text for r in results)
                                     gesture_triggered["left_open_palm"] = True
 
@@ -315,9 +393,11 @@ def main() -> None:
                                     if ocr_text_result:
                                         success = ocr.copy_to_clipboard(ocr_text_result)
                                         if success:
-                                            board.say("Copied text to clipboard!", frames=100)
+                                            menu.say(
+                                                "Copied text to clipboard!", frames=100
+                                            )
                                         else:
-                                            board.say("Failed to copy text", frames=100)
+                                            menu.say("Failed to copy text", frames=100)
                                     ocr_copied = True
                             else:
                                 ocr_copied = False
@@ -327,43 +407,51 @@ def main() -> None:
                                 if not ocr_spoken:
                                     if ocr_text_result:
                                         ocr.speak_text(ocr_text_result)
-                                        board.say("Reading aloud...", frames=100)
+                                        menu.say("Reading aloud...", frames=100)
                                     ocr_spoken = True
                             else:
                                 ocr_spoken = False
 
                             # Clear OCR Area (Both Open Palms held for 2.0s)
-                            if "both_open_palms" in gesture_start_times and not gesture_triggered.get("both_open_palms", True):
+                            if (
+                                "both_open_palms" in gesture_start_times
+                                and not gesture_triggered.get("both_open_palms", True)
+                            ):
                                 if now - gesture_start_times["both_open_palms"] >= 2.0:
-                                    board.clear()
+                                    canvas.clear()
                                     ocr_text_result = ""
-                                    board.say("OCR Canvas Cleared")
+                                    menu.say("OCR Canvas Cleared")
                                     gesture_triggered["both_open_palms"] = True
 
                         # 5. Mode: Voice Command
-                        elif board.mode == "voice":
-                            board.stop_stroke()
+                        elif menu.mode == "voice":
+                            menu.set_mode("voice")
+                            canvas.stop_stroke()
                             # Start Listening (Left Hand Open Palm)
-                            if state.left_name == "open_palm":
+                            if state.left_name == "four_fingers_up":
                                 if not voice.is_currently_listening:
                                     voice.start_listening_background()
-                                    board.say("Listening...", frames=25)
+                                    menu.say("Listening...", frames=25)
                             # Stop Listening (Left Hand Closed Fist)
-                            elif state.left_name == "fist":
+                            elif state.left_name == "closed_fist":
                                 if voice.is_currently_listening:
                                     voice.stop_listening_background()
-                                    board.say("Listening stopped", frames=100)
+                                    menu.say("Listening stopped", frames=100)
                             # Repeat Last Command (Left Hand Thumb UP)
                             elif state.left_name == "thumb_up":
                                 if not voice_command_repeated:
                                     if last_voice_command:
-                                        board.say(f"Repeating: {last_voice_command}", frames=100)
-                                        action = board.apply_voice_command(last_voice_command)
+                                        menu.say(
+                                            f"Repeating: {last_voice_command}", frames=100
+                                        )
+                                        action = canvas.apply_voice_command(
+                                            last_voice_command
+                                        )
                                         if action == "game":
                                             game.reset()
-                                        voice.speak(board.message)
+                                        voice.speak(menu.message)
                                     else:
-                                        board.say("No command to repeat", frames=100)
+                                        menu.say("No command to repeat", frames=100)
                                     voice_command_repeated = True
                             else:
                                 voice_command_repeated = False
@@ -371,65 +459,192 @@ def main() -> None:
                             # Retrieve background commands
                             v_res = voice.get_result()
                             if v_res:
-                                board.say(v_res.message, frames=150)
+                                menu.say(v_res.message, frames=150)
                                 if v_res.command:
                                     last_voice_command = v_res.command
-                                    action = board.apply_voice_command(v_res.command)
+                                    action = canvas.apply_voice_command(v_res.command)
                                     if action == "game":
                                         game.reset()
-                                    voice.speak(board.message)
+                                    voice.speak(menu.message)
 
             # Draw active mode HUD and overlays
             if app_state == "menu":
-                board.draw_mode_menu(output, menu_cursor, menu_selection)
-            elif board.mode == "piano":
-                piano.draw(output, state.cursor)
-            elif board.mode == "game":
+                menu.draw_mode_menu(output, menu_cursor, menu_selection)
+            elif menu.mode == "piano":
+                menu.set_mode("piano")
+                piano.draw(output, state.right_cursor)
+            elif menu.mode == "game":
+                menu.set_mode("game")
                 game.draw(output)
-            elif board.mode == "ocr":
+            elif menu.mode == "ocr":
+                menu.set_mode("ocr")
                 # Draw handwriting bounding zone
                 cx, cy = width // 2, height // 2
-                cv2.rectangle(output, (cx - 280, cy - 180), (cx + 280, cy + 180), (255, 165, 0), 2, cv2.LINE_4)
-                cv2.putText(output, "OCR Zone - Write Here", (cx - 270, cy - 195), cv2.FONT_HERSHEY_SIMPLEX, 0.55, (255, 165, 0), 1, cv2.LINE_AA)
+                w = menu.scale(280)
+                h = menu.scale(180)
+                cv2.rectangle(
+                    output,
+                    (cx - w, cy - h),
+                    (cx + w, cy + h),
+                    (255, 165, 0),
+                    2,
+                    cv2.LINE_4,
+                )
+                cv2.putText(
+                    output,
+                    "OCR Zone - Write Here",
+                    (
+                        cx - menu.scale(270),
+                        cy - menu.scale(195),
+                    ),
+                    cv2.FONT_HERSHEY_SIMPLEX,
+                    0.55 * menu.scale(1),
+                    (255, 165, 0),
+                    menu.scale(1),
+                    cv2.LINE_AA,
+                )
                 # Show recognized text block
                 if ocr_text_result:
-                    cv2.rectangle(output, (cx - 300, height - 120), (cx + 300, height - 55), (35, 30, 25), -1)
-                    cv2.rectangle(output, (cx - 300, height - 120), (cx + 300, height - 55), (255, 165, 0), 1)
-                    cv2.putText(output, f"Recognized: {ocr_text_result[:45]}...", (cx - 280, height - 85), cv2.FONT_HERSHEY_SIMPLEX, 0.55, (255, 255, 255), 1, cv2.LINE_AA)
-            elif board.mode == "voice":
+                    panel_w = menu.scale(300)
+                    panel_top = height - menu.scale(120)
+                    panel_bottom = height - menu.scale(55)
+                    cv2.rectangle(
+                        output,
+                        (cx - panel_w, panel_top),
+                        (cx + panel_w, panel_bottom),
+                        (35, 30, 25),
+                        -1,
+                    )
+                    cv2.rectangle(
+                        output,
+                        (cx - panel_w, panel_top),
+                        (cx + panel_w, panel_bottom),
+                        (255, 165, 0),
+                        1,
+                    )
+                    cv2.putText(
+                        output,
+                        f"Recognized: {ocr_text_result[:45]}...",
+                        (cx - menu.scale(280), height - menu.scale(85)),
+                        cv2.FONT_HERSHEY_SIMPLEX,
+                        0.55 * menu.scale(1),
+                        (255, 255, 255),
+                        menu.scale(1),
+                        cv2.LINE_AA,
+                    )
+            elif menu.mode == "voice":
+                menu.set_mode("voice")
                 cx, cy = width // 2, height // 2
                 # Pulsing mic icon
                 if voice.is_currently_listening:
-                    pulse = int(24 + 6 * math.sin(time.time() * 8))
-                    cv2.circle(output, (cx, cy - 40), pulse, (0, 0, 255), -1)
-                    cv2.circle(output, (cx, cy - 40), pulse + 6, (0, 0, 150), 2)
-                    cv2.putText(output, "LISTENING...", (cx - 55, cy + 30), cv2.FONT_HERSHEY_SIMPLEX, 0.65, (0, 0, 255), 2, cv2.LINE_AA)
+                    pulse = menu.scale(int(24 + 6 * math.sin(time.time() * 8)))
+                    cv2.circle(
+                        output,
+                        (cx, cy - menu.scale(40)),
+                        pulse,
+                        (0, 0, 255),
+                        -1,
+                    )
+                    cv2.circle(
+                        output, (cx, cy - menu.scale(40)), pulse + 6, (0, 0, 150), 2
+                    )
+                    cv2.putText(
+                        output,
+                        "LISTENING...",
+                        (
+                            cx - menu.scale(55),
+                            cy + menu.scale(30),
+                        ),
+                        cv2.FONT_HERSHEY_SIMPLEX,
+                        0.65 * (menu.scale(100) / 100),
+                        (0, 0, 255),
+                        menu.scale(2),
+                        cv2.LINE_AA,
+                    )
                 else:
-                    cv2.circle(output, (cx, cy - 40), 24, (100, 100, 100), -1)
-                    cv2.putText(output, "Open Palm: Listen | Fist: Stop | Thumb UP: Repeat", (cx - 200, cy + 30), cv2.FONT_HERSHEY_SIMPLEX, 0.55, (200, 200, 200), 1, cv2.LINE_AA)
-                
+                    cv2.circle(
+                        output,
+                        (cx, cy - menu.scale(40)),
+                        menu.scale(24),
+                        (100, 100, 100),
+                        -1,
+                    )
+                    cv2.putText(
+                        output,
+                        "Open Palm: Listen | Fist: Stop | Thumb UP: Repeat",
+                        (cx - 200, cy + 30),
+                        cv2.FONT_HERSHEY_SIMPLEX,
+                        0.55,
+                        (200, 200, 200),
+                        1,
+                        cv2.LINE_AA,
+                    )
+
                 if last_voice_command:
-                    cv2.putText(output, f"Last Command: {last_voice_command}", (cx - 150, cy + 70), cv2.FONT_HERSHEY_SIMPLEX, 0.55, (100, 255, 100), 1, cv2.LINE_AA)
+                    cv2.putText(
+                        output,
+                        f"Last Command: {last_voice_command}",
+                        (cx - 150, cy + 70),
+                        cv2.FONT_HERSHEY_SIMPLEX,
+                        0.55,
+                        (100, 255, 100),
+                        1,
+                        cv2.LINE_AA,
+                    )
 
             # Draw progress rings for hold gestures
-            if state.cursor:
-                for g, threshold in [("left_fist", 0.8), ("left_thumb_up", 0.8), ("both_open_palms", 2.0), ("both_thumbs_up", 1.0 if board.mode in ("draw", "eraser") else 2.0), ("left_open_palm", 1.0)]:
+            if state.right_cursor:
+                for g, threshold in [
+                    ("left_fist", 0.8),
+                    ("left_thumb_up", 0.8),
+                    ("both_open_palms", 2.0),
+                    ("both_thumbs_up", 1.0 if menu.mode == "draw" else 2.0),
+                    ("left_open_palm", 1.0),
+                ]:
                     if g in gesture_start_times and not gesture_triggered.get(g, True):
                         elapsed = now - gesture_start_times[g]
                         progress = min(1.0, elapsed / threshold)
                         angle = int(progress * 360)
-                        cursor_pos = state.cursor
+                        cursor_pos = state.right_cursor
                         if g.startswith("left_") and state.left_cursor:
                             cursor_pos = state.left_cursor
-                        cv2.ellipse(output, cursor_pos, (30, 30), 0, -90, -90 + angle, (0, 255, 255), 3, cv2.LINE_AA)
+                        cv2.ellipse(
+                            output,
+                            cursor_pos,
+                            (30, 30),
+                            0,
+                            -90,
+                            -90 + angle,
+                            (0, 255, 255),
+                            3,
+                            cv2.LINE_AA,
+                        )
 
             # Overlay System Idle screensaver
             if idle_active:
                 overlay = output.copy()
                 cv2.rectangle(overlay, (0, 0), (width, height), (12, 12, 18), -1)
                 cv2.addWeighted(overlay, 0.82, output, 0.18, 0, output)
-                cv2.putText(output, "SYSTEM IDLE", (width // 2 - 100, height // 2 - 20), cv2.FONT_HERSHEY_SIMPLEX, 1.1, (180, 180, 200), 3, cv2.LINE_AA)
-                cv2.putText(output, "Show hand to wake up", (width // 2 - 120, height // 2 + 20), cv2.FONT_HERSHEY_SIMPLEX, 0.55, (140, 140, 150), 1, cv2.LINE_AA)
+                cv2.putText(
+                    output,
+                    "SYSTEM IDLE",
+                    (width // 2 - 100, height // 2 - 20),
+                    cv2.FONT_HERSHEY_SIMPLEX,
+                    1.1,
+                    (180, 180, 200),
+                    3,
+                    cv2.LINE_AA,
+                )
+                cv2.putText(
+                    output,
+                    "Show hand to wake up",
+                    (width // 2 - 120, height // 2 + 20),
+                    cv2.FONT_HERSHEY_SIMPLEX,
+                    0.55,
+                    (140, 140, 150),
+                    1,
+                    cv2.LINE_AA,
+                )
 
             # Calculate and draw FPS
             now_fps = time.time()
@@ -441,16 +656,39 @@ def main() -> None:
             if app_state == "menu":
                 cv2.putText(
                     output,
-                    "Index to point. Index + Middle selects. Index + Middle + Ring returns here.",
-                    (28, 38),
+                    "Index to point. Index + Middle selects.",
+                    (menu.scale(60), menu.scale(950)),
                     cv2.FONT_HERSHEY_SIMPLEX,
                     0.56,
                     (245, 245, 245),
-                    1,
+                    menu.scale(1),
+                    cv2.LINE_AA,
+                )
+
+                cv2.putText(
+                    output,
+                    "Index + Middle + Ring returns here.",
+                    (menu.scale(60), menu.scale(1050)),
+                    cv2.FONT_HERSHEY_SIMPLEX,
+                    0.56,
+                    (245, 245, 245),
+                    menu.scale(1),
+                    cv2.LINE_AA,
+                )
+                cv2.putText(
+                    output,
+                    "use right hand gestures to control modes.",
+                    (menu.scale(60), menu.scale(1150)),
+                    cv2.FONT_HERSHEY_SIMPLEX,
+                    0.56,
+                    (245, 245, 245),
+                    menu.scale(1),
                     cv2.LINE_AA,
                 )
             else:
-                board.draw_ui(output, state.cursor, state.name, current_brush_size)
+                canvas.draw_ui(
+                    output, state.right_cursor, state.right_name, current_brush_size
+                )
 
             cv2.putText(
                 output,
@@ -469,7 +707,9 @@ def main() -> None:
             if key in (27, ord("q")):
                 break
             if key:
-                ocr, voice, app_state = _handle_key(key, board, ocr, voice, game, app_state)
+                ocr, voice, app_state = _handle_key(
+                    key, canvas, ocr, voice, game, app_state
+                )
     finally:
         tracker.close()
         cap.release()
@@ -477,24 +717,19 @@ def main() -> None:
 
 
 def _draw_or_erase(
-    board: DrawingBoard, state: GestureState, current_brush_size: int
+    canvas: DrawingCanvas, state: GestureState, current_brush_size: int
 ) -> None:
-    if state.cursor is None:
-        board.stop_stroke()
+    if state.right_cursor is None:
+        canvas.stop_stroke()
         return
 
-    if board.mode == "eraser":
-        if state.name == "draw":
-            board.erase(state.cursor, current_brush_size)
+    if state.right_name == "draw":
+        if canvas.tool == "eraser":
+            canvas.erase(state.right_cursor, current_brush_size)
         else:
-            board.stop_stroke()
-    elif board.mode in ("draw", "ocr"):
-        if state.name == "draw":
-            board.draw(state.cursor, current_brush_size)
-        else:
-            board.stop_stroke()
+            canvas.draw(state.right_cursor, current_brush_size)
     else:
-        board.stop_stroke()
+        canvas.stop_stroke()
 
 
 def _menu_selection_for_cursor(cursor, width: int) -> str:
@@ -507,26 +742,34 @@ def _menu_selection_for_cursor(cursor, width: int) -> str:
     return MENU_OPTIONS[index][0]
 
 
-def _activate_mode(board: DrawingBoard, mode: str, game: FruitNinjaMiniGame) -> None:
+def _activate_mode(
+    board: DrawingCanvas, menu: MenuSelection, mode: str, game: FruitNinjaMiniGame
+) -> None:
     if mode == "draw":
-        board.mode = "draw"
+        menu.mode = "draw"
+        menu.set_mode("draw")
         board.color = (0, 0, 255)
+        board.tool = "pencil"
         board.effect = "normal"
     elif mode == "piano":
-        board.mode = "piano"
+        menu.mode = "piano"
+        menu.set_mode("piano")
     elif mode == "game":
-        board.mode = "game"
+        menu.mode = "game"
+        menu.set_mode("game")
         game.reset()
     elif mode == "ocr":
-        board.mode = "ocr"
+        menu.mode = "ocr"
+        menu.set_mode("ocr")
     elif mode == "voice":
-        board.mode = "voice"
+        menu.mode = "voice"
+        menu.set_mode("voice")
     board.stop_stroke()
 
 
 def _handle_key(
     key: int,
-    board: DrawingBoard,
+    board: DrawingCanvas,
     ocr: Optional[HandwritingOCR],
     voice: Optional[VoiceCommandListener],
     game: FruitNinjaMiniGame,
@@ -567,10 +810,6 @@ def _handle_key(
         board.say("Voice mode")
         app_state = "active"
     return ocr, voice, app_state
-
-
-if __name__ == "__main__":
-    main()
 
 
 if __name__ == "__main__":
