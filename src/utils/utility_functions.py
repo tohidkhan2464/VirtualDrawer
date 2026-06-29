@@ -1,19 +1,11 @@
 from __future__ import annotations
 
-import argparse
-import time
-import math
 from typing import Optional
-
-import cv2
-
 from src.menu_selection import MenuSelection, MENU_OPTIONS
 from src.drawing_canvas import DrawingCanvas
 from src.fruit_ninja import FruitNinjaMiniGame
-from src.gesture_detector import GestureDetector, GestureState
-from src.hand_tracker import HandTracker
-from src.handwriting_ocr import HandwritingOCR
-from src.virtual_piano import VirtualPiano
+from src.gesture_detector import GestureState
+from src.ocr_canvas import OCRCanvas
 from src.voice_commands import VoiceCommandListener
 
 
@@ -71,7 +63,7 @@ def activate_mode(
 def handle_key(
     key: int,
     board: DrawingCanvas,
-    ocr: Optional[HandwritingOCR],
+    ocr_canvas: Optional[OCRCanvas],
     voice: Optional[VoiceCommandListener],
     game: FruitNinjaMiniGame,
     app_state: str,
@@ -99,8 +91,8 @@ def handle_key(
         board.say(f"{board.mode.title()} mode")
         app_state = "active"
     elif key == ord("o"):
-        if ocr is None:
-            ocr = HandwritingOCR()
+        if ocr_canvas is None:
+            ocr_canvas = OCRCanvas()
         board.mode = "ocr"
         board.say("OCR mode")
         app_state = "active"
@@ -110,4 +102,4 @@ def handle_key(
         board.mode = "voice"
         board.say("Voice mode")
         app_state = "active"
-    return ocr, voice, app_state
+    return ocr_canvas, voice, app_state

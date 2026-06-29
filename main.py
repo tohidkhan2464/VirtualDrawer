@@ -9,10 +9,11 @@ import cv2
 
 from src.menu_selection import MenuSelection, MENU_OPTIONS
 from src.drawing_canvas import DrawingCanvas
+from src.ocr_canvas import OCRCanvas
 from src.game import FruitNinjaMiniGame
 from src.gesture_detector import GestureDetector, GestureState
 from src.hand_tracker import HandTracker
-from src.handwriting_ocr import HandwritingOCR
+# from src.handwriting_ocr import HandwritingOCR
 from src.virtual_piano import VirtualPiano
 from src.voice_commands import VoiceCommandListener
 from src.utils.utility_functions import (
@@ -61,10 +62,11 @@ def main() -> None:
     detector = GestureDetector()
     menu = MenuSelection()
     canvas = DrawingCanvas()
+    ocr_canvas = OCRCanvas()
 
     piano = VirtualPiano()
     game = FruitNinjaMiniGame()
-    ocr = HandwritingOCR()
+    # ocr = HandwritingOCR()
     voice = VoiceCommandListener()
 
     frame_number = 0
@@ -114,6 +116,7 @@ def main() -> None:
             height, width = frame.shape[:2]
             menu.ensure_size(width, height)
             canvas.ensure_size(width, height)
+            ocr_canvas.ensure_size(width, height)
             piano.ensure_layout(width, height)
             frame_number += 1
 
@@ -138,8 +141,9 @@ def main() -> None:
             if not args.no_landmarks:
                 tracker.draw_landmarks(frame, hands)
 
-            if menu.mode in ("draw", "ocr"):
+            if menu.mode == "draw":
                 output = canvas.compose(frame)
+
             else:
                 output = frame.copy()
 
@@ -150,7 +154,7 @@ def main() -> None:
             if state.left_name == "thumb_up":
                 active_gestures.append("left_thumb_up")
             if state.left_name == "four_fingers_up":
-                active_gestures.append("left_open_palm")
+                active_gestures.append("left_open_hand")
             if state.left_name == "pinky_up":
                 active_gestures.append("left_pinky_up")
             if state.left_name == "rock":
@@ -174,6 +178,7 @@ def main() -> None:
                 # ------------------- STATE: MENU -------------------
                 if app_state == "menu":
                     canvas.stop_stroke()
+                    ocr_canvas.stop_stroke()
 
                     # Point with LEFT Index
                     if state.left_cursor:
@@ -200,6 +205,7 @@ def main() -> None:
                         app_state = "menu"
                         # board.set_mode("draw")
                         canvas.stop_stroke()
+                        ocr_canvas.stop_stroke()
                         menu.say("Mode menu")
                         menu_cursor = None
                     else:
@@ -279,8 +285,7 @@ def main() -> None:
                             # Draw palette whenever it is open
                             if canvas.show_color_menu:
                                 hovered_color = canvas.draw_color_palette(
-                                    output,
-                                    state.right_cursor,
+                                    output, state.right_cursor
                                 )
 
                                 # Select using Index + Middle
@@ -300,6 +305,7 @@ def main() -> None:
                                 if action == "game":
                                     game.reset()
                                 canvas.stop_stroke()
+                                ocr_canvas.stop_stroke()
 
                             # Draw or Erase
                             if not canvas.show_color_menu and not action:
@@ -309,6 +315,7 @@ def main() -> None:
                         elif menu.mode == "piano":
                             menu.set_mode("piano")
                             canvas.stop_stroke()
+                            ocr_canvas.stop_stroke()
                             # Sustain pedal (Left Hand Open Palm)
                             sustain = state.left_name == "four_fingers_up"
                             piano.touch(state.right_cursor, sustain_active=sustain)
@@ -356,6 +363,7 @@ def main() -> None:
                         # 3. Mode: Fruit Ninja
                         elif menu.mode == "game":
                             canvas.stop_stroke()
+                            ocr_canvas.stop_stroke()
                             menu.set_mode("game")
                             # Restart Game (Both Thumbs Up held for 2.0s)
                             if (
@@ -382,27 +390,71 @@ def main() -> None:
                         # 4. Mode: Handwriting OCR
                         elif menu.mode == "ocr":
                             menu.set_mode("ocr")
-                            # Draw strokes inside the OCR area
-                            draw_or_erase(canvas, state, current_brush_size)
-
-                            # Start Recognition (Left Open Palm held for 1.0s)
-                            if (
-                                "left_open_palm" in gesture_start_times
-                                and not gesture_triggered.get("left_open_palm", True)
-                            ):
-                                if now - gesture_start_times["left_open_palm"] >= 1.0:
-                                    results, msg = ocr.recognize(
-                                        canvas.get_page_on_white()
+                            ocr_canvas.update(
+                                cursor=state.right_cursor,
+                                gesture=(
+                                    state.right_name
+                                    if state.right_name
+                                    in (
+                                        "draw",
+                                        "color_menu",
                                     )
+                                    else None
+                                ),
+                            )
+
+                            if state.right_name == "pinch":
+                                if not pinch_started:
+                                    pinch_started = True
+                                    pinch_start_dist = state.right_pinch_distance
+                                    pinch_start_brush = ocr_canvas.brush_size
+
+                                else:
+                                    diff = state.right_pinch_distance - pinch_start_dist
+                                    ocr_canvas.brush_size = max(
+                                        ocr_canvas.min_brush,
+                                        min(
+                                            ocr_canvas.max_brush,
+                                            int(pinch_start_brush + diff * 0.2),
+                                        ),
+                                    )
+
+                            else:
+                                pinch_started = False
+
+                            # Start Recognition (Left Open Palm held for 0.5s)
+                            if (
+                                "left_open_hand" in gesture_start_times
+                                and not gesture_triggered.get("left_open_hand", True)
+                            ):
+                                if now - gesture_start_times["left_open_hand"] >= 0.5:
+                                    results, msg = ocr_canvas.recognize(
+                                        ocr_canvas.get_page()
+                                    )
+
                                     menu.say(msg, frames=150)
                                     ocr_text_result = " ".join(r.text for r in results)
-                                    gesture_triggered["left_open_palm"] = True
+                                    print("Recongnized resukts : ", results)
+                                    ocr_canvas.recognized_text = ocr_text_result
+                                    if results:
+                                        ocr_canvas.confidence = (
+                                            sum(r.confidence for r in results)
+                                            / len(results)
+                                        ) * 100
+
+                                    else:
+                                        ocr_canvas.confidence = 0
+
+                                    gesture_triggered["left_open_hand"] = True
+                                ocr_canvas.stop_stroke()
 
                             # Copy Result (Left Hand Thumb UP)
                             if state.left_name == "thumb_up":
                                 if not ocr_copied:
-                                    if ocr_text_result:
-                                        success = ocr.copy_to_clipboard(ocr_text_result)
+                                    if ocr_canvas.recognized_text:
+                                        success = ocr_canvas.copy_to_clipboard(
+                                            ocr_canvas.recognized_text
+                                        )
                                         if success:
                                             menu.say(
                                                 "Copied text to clipboard!", frames=100
@@ -416,8 +468,8 @@ def main() -> None:
                             # Read Aloud (Left Hand Rock Sign)
                             if state.left_name == "rock":
                                 if not ocr_spoken:
-                                    if ocr_text_result:
-                                        ocr.speak_text(ocr_text_result)
+                                    if ocr_canvas.recognized_text:
+                                        ocr_canvas.speak_text(ocr_canvas.recognized_text)
                                         menu.say("Reading aloud...", frames=100)
                                     ocr_spoken = True
                             else:
@@ -429,8 +481,10 @@ def main() -> None:
                                 and not gesture_triggered.get("both_open_palms", True)
                             ):
                                 if now - gesture_start_times["both_open_palms"] >= 2.0:
-                                    canvas.clear()
-                                    ocr_text_result = ""
+                                    ocr_canvas.clear()
+                                    ocr_canvas.last_point = None
+                                    ocr_canvas.is_drawing = False
+                                    ocr_canvas.recognized_text = ""
                                     menu.say("OCR Canvas Cleared")
                                     gesture_triggered["both_open_palms"] = True
 
@@ -438,6 +492,7 @@ def main() -> None:
                         elif menu.mode == "voice":
                             menu.set_mode("voice")
                             canvas.stop_stroke()
+                            ocr_canvas.stop_stroke()
                             # Start Listening (Left Hand Open Palm)
                             if state.left_name == "four_fingers_up":
                                 if not voice.is_currently_listening:
@@ -489,60 +544,8 @@ def main() -> None:
                 game.draw(output)
             elif menu.mode == "ocr":
                 menu.set_mode("ocr")
-                # Draw handwriting bounding zone
-                cx, cy = width // 2, height // 2
-                w = menu.scale(280)
-                h = menu.scale(180)
-                cv2.rectangle(
-                    output,
-                    (cx - w, cy - h),
-                    (cx + w, cy + h),
-                    (255, 165, 0),
-                    2,
-                    cv2.LINE_4,
-                )
-                cv2.putText(
-                    output,
-                    "OCR Zone - Write Here",
-                    (
-                        cx - menu.scale(270),
-                        cy - menu.scale(195),
-                    ),
-                    cv2.FONT_HERSHEY_SIMPLEX,
-                    0.55 * menu.scale(1),
-                    (255, 165, 0),
-                    menu.scale(1),
-                    cv2.LINE_AA,
-                )
-                # Show recognized text block
-                if ocr_text_result:
-                    panel_w = menu.scale(300)
-                    panel_top = height - menu.scale(120)
-                    panel_bottom = height - menu.scale(55)
-                    cv2.rectangle(
-                        output,
-                        (cx - panel_w, panel_top),
-                        (cx + panel_w, panel_bottom),
-                        (35, 30, 25),
-                        -1,
-                    )
-                    cv2.rectangle(
-                        output,
-                        (cx - panel_w, panel_top),
-                        (cx + panel_w, panel_bottom),
-                        (255, 165, 0),
-                        1,
-                    )
-                    cv2.putText(
-                        output,
-                        f"Recognized: {ocr_text_result[:45]}...",
-                        (cx - menu.scale(280), height - menu.scale(85)),
-                        cv2.FONT_HERSHEY_SIMPLEX,
-                        0.55 * menu.scale(1),
-                        (255, 255, 255),
-                        menu.scale(1),
-                        cv2.LINE_AA,
-                    )
+                ocr_canvas.draw(output)
+
             elif menu.mode == "voice":
                 menu.set_mode("voice")
                 cx, cy = width // 2, height // 2
@@ -610,7 +613,7 @@ def main() -> None:
                     ("left_thumb_up", 0.8),
                     ("both_open_palms", 2.0),
                     ("both_thumbs_up", 1.0 if menu.mode == "draw" else 2.0),
-                    ("left_open_palm", 1.0),
+                    ("left_open_hand", 1.0),
                 ]:
                     if g in gesture_start_times and not gesture_triggered.get(g, True):
                         elapsed = now - gesture_start_times[g]
@@ -719,8 +722,8 @@ def main() -> None:
             if key in (27, ord("q")):
                 break
             if key:
-                ocr, voice, app_state = handle_key(
-                    key, canvas, ocr, voice, game, app_state
+                ocr_canvas, voice, app_state = handle_key(
+                    key, canvas, ocr_canvas, voice, game, app_state
                 )
     finally:
         tracker.close()
