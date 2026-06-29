@@ -90,12 +90,25 @@ class VirtualPiano:
         if not self.keys:
             self.ensure_layout(frame.shape[1], frame.shape[0])
 
-        # # translucent top HUD
-        # hud = frame.copy()
-        # cv2.rectangle(hud, (20, 20), (520, 140), (25, 25, 25), -1)
-        # cv2.addWeighted(hud, 0.55, frame, 0.45, 0, frame)
-        # cv2.rectangle(frame, (20, 20), (520, 140), (255, 255, 255), 2)
+        blurred = cv2.GaussianBlur(frame, (41, 41), 0)
+        dark_overlay = blurred.copy()
 
+        cv2.rectangle(
+            dark_overlay,
+            (0, 0),
+            (self.width, self.height),
+            (10, 10, 10),
+            -1,
+        )
+
+        cv2.addWeighted(
+            dark_overlay,
+            0.82,
+            blurred,
+            0.18,
+            0,
+            frame,
+        )
         # Draw Title
         cv2.putText(
             frame,
