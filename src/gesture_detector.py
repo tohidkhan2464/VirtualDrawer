@@ -110,13 +110,15 @@ class GestureDetector:
             ):
                 right_name = "pinky_up"
 
-            # elif (
-            #     right_fingers["index"]
-            #     and right_fingers["middle"]
-            #     and right_fingers["pinky"]
-            #     and not right_fingers["ring"]
-            # ):
-            #     right_name = "color_menu"
+            elif (
+                right_fingers["index"]
+                and right_fingers["pinky"]
+                and not right_fingers["middle"]
+                and not right_fingers["ring"]
+                and not right_fingers["thumb"]
+            ):
+                right_name = "rock"
+                
             # All five fingers
             elif all(right_fingers.values()):
                 right_name = "open_hand"

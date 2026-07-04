@@ -6,6 +6,8 @@ import time
 import cv2
 import numpy as np
 
+from .voice_commands import VoiceCommandListener
+
 Point = Tuple[int, int]
 Color = Tuple[int, int, int]
 
@@ -20,13 +22,14 @@ class OCRResult:
 class OCRCanvas:
     """Dedicated UI for Handwriting OCR."""
 
-    def __init__(self) -> None:
+    def __init__(self, voice: VoiceCommandListener) -> None:
         self.width = 1280
+        self.voice = voice
         self.height = 720
         self.paper_rect = (0, 0, 0, 0)
         self.result_rect = (0, 0, 0, 0)
         self.current_tool = "write"
-        self.brush_size = 8
+        self.brush_size = 3
         self.recognized_text = ""
         self.confidence = 0.0
         self.hover_button: Optional[str] = None
@@ -38,14 +41,12 @@ class OCRCanvas:
         self.page = np.ones((10, 10, 3), dtype=np.uint8) * 255
         self.last_point: Optional[Point] = None
         self.is_drawing = False
-        self.min_brush = 3
-        self.max_brush = 40
         self.paper_padding = 12
         self.cursor = None
         self.cursor_inside = False
 
         # Brush settings
-        self.eraser_size = 24
+        self.eraser_size = 12
 
         # UI colors
         self.paper_border_color = (255, 170, 0)
@@ -157,16 +158,6 @@ class OCRCanvas:
         page_point = self.screen_to_page(cursor)
         self.draw_point(page_point)
 
-    def set_tool(self, tool: str):
-        if tool in ("write", "erase"):
-            self.current_tool = tool
-
-    def increase_brush(self):
-        self.brush_size = min(self.max_brush, self.brush_size + 2)
-
-    def decrease_brush(self):
-        self.brush_size = max(self.min_brush, self.brush_size - 2)
-
     def draw_point(self, point: Point):
         if self.last_point is None:
             self.last_point = point
@@ -220,19 +211,13 @@ class OCRCanvas:
     # Paper
     def draw_paper(self, frame):
         x, y, w, h = self.paper_rect
-        shadow = frame.copy()
-        cv2.rectangle(
-            shadow,
-            (x + 6, y + 6),
-            (x + w + 6, y + h + 6),
-            (0, 0, 0),
-            -1,
-        )
-        cv2.addWeighted(shadow, 0.22, frame, 0.78, 0, frame)
+
         border = self.paper_hover_color if self.cursor_inside else self.paper_border_color
 
+        # Draw slightly transparent paper background
+        overlay = frame.copy()
         cv2.rectangle(
-            frame,
+            overlay,
             (x, y),
             (x + w, y + h),
             self.paper_bg,
@@ -240,8 +225,24 @@ class OCRCanvas:
             cv2.LINE_AA,
         )
 
-        frame[y : y + h, x : x + w] = self.page
+        paper_alpha = 0.25  # Background transparency
+        cv2.addWeighted(overlay, paper_alpha, frame, 1 - paper_alpha, 0, frame)
 
+        # Blend the drawing page with the camera image
+        page_alpha = 0.65  # Increase/decrease to control visibility of hand
+        roi = frame[y : y + h, x : x + w]
+
+        blended = cv2.addWeighted(
+            self.page,
+            page_alpha,
+            roi,
+            1 - page_alpha,
+            0,
+        )
+
+        frame[y : y + h, x : x + w] = blended
+
+        # Border
         cv2.rectangle(
             frame,
             (x, y),
@@ -251,6 +252,7 @@ class OCRCanvas:
             cv2.LINE_AA,
         )
 
+        # Title
         cv2.putText(
             frame,
             "Write Here",
@@ -370,19 +372,3 @@ class OCRCanvas:
         except Exception:
             return False
 
-    def speak_text(self, text: str) -> None:
-        if not text.strip():
-            return
-        import threading
-
-        def _speak():
-            try:
-                import pyttsx3
-
-                engine = pyttsx3.init()
-                engine.say(text)
-                engine.runAndWait()
-            except Exception:
-                pass
-
-        threading.Thread(target=_speak, daemon=True).start()

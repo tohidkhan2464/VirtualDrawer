@@ -1,39 +1,41 @@
 # 🖐️ VirtualDrawer — Gestures Guide
 
 > **Hand Convention**
-> - **Right Hand** = Action hand — controls the cursor and triggers mode actions.
-> - **Left Hand** = Modifier hand — controls drawing tools, modifiers, and power-ups.
-> - Both hands together enable special two-handed gestures.
+> - **Right Hand** = primary action hand in active modes.
+> - **Left Hand** = menu selector and modifier hand.
+> - Two hands enable the clear/save/restart gestures.
 
 ---
 
 ## Gesture Glossary
 
-| Symbol | Meaning |
-|--------|---------|
-| ☝️ | Index finger raised, all others folded |
-| ✌️ | Index + Middle raised, others folded |
-| 🤟 | Index + Middle + Ring raised, pinky folded |
-| 👋 | All four fingers raised (Open Palm) |
-| ✊ | All fingers folded (Fist) |
-| 👍 | Only Thumb raised |
-| 🤙 | Only Pinky raised |
-| 🤘 | Index + Pinky raised (Rock Sign) |
-| 🤙+ | Index + Middle + Pinky raised (Color Menu Sign) |
-| 🤏 | Thumb and Index close together (Pinch) |
+## Shared Controls
+
+There is no single hand gesture that has the exact same effect in every mode, but the following controls are reused across multiple modes.
+
+| Gesture | Hand | Effect |
+|---------|------|--------|
+| ☝️ Index Finger | **Left** | Move the menu cursor on the mode-selection screen |
+| ✌️ Index + Middle | **Left** | Select the highlighted mode on the mode-selection screen |
+| 🤟 Index + Middle + Ring | **Left** | Return to the menu from an active mode |
+| 🤏 Pinch | **Right** | Adjust brush size in Drawing and OCR modes |
+| No hand visible for 10 seconds | System | Enter Idle mode and show the idle message |
+| Any hand detected | System | Wake from Idle automatically |
+| **Q** / **Esc** key | System | Quit the application |
 
 ---
 
 ## 🏠 Menu State (Mode Selection)
 
-> Shown at launch and whenever you return from any active mode.
+> Shown at launch and whenever you return from an active mode.
 
 | Gesture | Hand | Action |
 |---------|------|--------|
-| ☝️ Index Finger | **Right** | Move cursor to highlight a mode card |
-| ✌️ Index + Middle | **Right** | **Select** the currently highlighted mode |
+| ☝️ Index Finger | **Left** | Move the cursor to highlight a mode card |
+| ✌️ Index + Middle | **Left** | Select the currently highlighted mode |
+| 🤟 Index + Middle + Ring | **Left** | Return to the menu (no effect in menu state) |
 
-**Available modes:** Drawing · Piano · Game (Fruit Ninja) · OCR Mode · Voice Mode
+**Available modes:** Drawing · Piano · Game (Fruit Ninja) · OCR Mode
 
 ---
 
@@ -45,49 +47,43 @@
 
 | Gesture | Hand | Action |
 |---------|------|--------|
-| ☝️ Index Finger | **Right** | **Draw** — move index tip to paint on the canvas |
-| ✌️ Index + Middle | **Right** | **Hover / Move** without drawing (lift stroke) |
-| 🤟 Index + Middle + Ring | **Right** | **Return to Menu** |
+| ☝️ Index Finger | **Right** | Draw on the canvas |
+| ✌️ Index + Middle | **Right** | Lift the stroke and move without drawing |
+| 🤟 Index + Middle + Ring | **Left** | Return to the menu |
 
-### Eraser
-
-| Gesture | Hand | Action |
-|---------|------|--------|
-| 🤙 Pinky Up | **Left** | **Toggle Eraser** on/off (single tap trigger) |
-| ☝️ Index Finger (in eraser mode) | **Right** | **Erase** under the index tip |
-
-### Brush Size
+### Tool and Brush Control
 
 | Gesture | Hand | Action |
 |---------|------|--------|
-| 🤏 Pinch (thumb ↔ index close) | **Left** | **Adjust Brush Size** — spread fingers wider to increase size, pinch tighter to decrease |
+| 🤙 Pinky Up | **Right** | Toggle eraser on/off |
+| 🤏 Pinch | **Right** | Adjust brush size |
+| 🤙 Index + Middle + Pinky | **Right** | Open the color palette |
+| ☝️ + ✌️ while palette is open | **Right** | Hover a swatch and select it |
 
-### Color Selection
-
-| Gesture | Hand | Action |
-|---------|------|--------|
-| 🤙+ Index + Middle + Pinky | **Left** | **Open Color Palette** popup |
-| ☝️ + ✌️ (while palette open) | **Right** | Hover over a color swatch, then raise **Index + Middle** to select it |
+> **Selecting Color:** Move the cursor over a color using index + middle + ring finger and select the color using only index + middle finger.
 
 > **Available colors:** Red · Green · Blue · Purple · Orange · Black
 
-### History
+### History and Canvas Actions
 
 | Gesture | Hand | Hold Duration | Action |
 |---------|------|--------------|--------|
-| ✊ Fist | **Left** | 0.8 s | **Undo** last stroke |
-| 👍 Thumb Up | **Left** | 0.8 s | **Redo** |
+| ✊ Fist | **Left** | 0.8 s | Undo the last stroke |
+| 👍 Thumb Up | **Left** | 0.8 s | Redo |
+| 👋 + 👋 Both Open Palms | Left + Right | 2.0 s | Clear the canvas |
+| 👍 + 👍 Both Thumbs Up | Left + Right | 1.0 s | Save the drawing to `saved_drawings/` |
 
-### Canvas Actions
+### Voice Commands in Drawing Mode
 
-| Gesture | Both Hands | Hold Duration | Action |
-|---------|-----------|--------------|--------|
-| 👋 + 👋 Both Open Palms | Left + Right | 2.0 s | **Clear Canvas** |
-| 👍 + 👍 Both Thumbs Up | Left + Right | 1.0 s | **Save** drawing to `saved_drawings/` |
+| Gesture | Hand | Action |
+|---------|------|--------|
+| 👋 Open Palm | **Left** | Start background voice listening |
 
-### Toolbar Buttons (on-screen)
+Supported voice commands while drawing: `clear`, `save`, `eraser`, `draw`, `red`, `green`, `blue`, `black`, `purple`, `orange`, `rainbow`, `neon`, `sparkle`, `fire`, `glow`, `piano`, `game`.
 
-Point your right-hand cursor at any toolbar button at the top of the screen and hover for ~18 frames to trigger it.
+### Toolbar Buttons
+
+Point the right-hand cursor at a toolbar button and hover for about 18 frames to trigger it.
 
 | Button | Action |
 |--------|--------|
@@ -100,7 +96,7 @@ Point your right-hand cursor at any toolbar button at the top of the screen and 
 | FIRE | Fire trail brush effect |
 | GLOW | Gaussian glow brush effect |
 | CLEAR | Clear the canvas |
-| SAVE | Save current page as PNG |
+| SAVE | Save the current page as PNG |
 
 ---
 
@@ -112,27 +108,28 @@ Point your right-hand cursor at any toolbar button at the top of the screen and 
 
 | Gesture | Hand | Action |
 |---------|------|--------|
-| ☝️ Index Finger | **Right** | **Play note** — move index tip over piano keys to play |
+| ☝️ Index Finger | **Right** | Play notes by moving the index tip over the keys |
 
-### Sustain & Octave
+### Sustain, Volume, and Octave
 
 | Gesture | Hand | Action |
 |---------|------|--------|
-| 👋 Open Palm | **Left** | **Sustain pedal** — hold to sustain currently pressed notes |
-| 👍 Thumb Up | **Left** | **Octave Up** (1-second cooldown between changes) |
-| 🤙 Pinky Up | **Left** | **Octave Down** (1-second cooldown between changes) |
+| 4 Fingers Up | **Left** | Raise volume every 0.5 s |
+| ✊ Fist | **Left** | Lower volume every 0.5 s |
+| ☝️ Index Finger | **Left** | Octave up (1-second cooldown) |
+| 🤙 Pinky Up | **Left** | Octave down (1-second cooldown) |
 
 ### Instrument
 
 | Gesture | Hand | Action |
 |---------|------|--------|
-| 🤘 Rock Sign (Index + Pinky) | **Left** | **Cycle to next instrument** (1-second cooldown) |
+| 🤘 Rock Sign | **Left** | Cycle to the next instrument (1-second cooldown) |
 
 ### Navigation
 
 | Gesture | Hand | Action |
 |---------|------|--------|
-| 🤟 Index + Middle + Ring | **Right** | **Return to Menu** |
+| 🤟 Index + Middle + Ring | **Left** | Return to the menu |
 
 ---
 
@@ -144,28 +141,28 @@ Point your right-hand cursor at any toolbar button at the top of the screen and 
 
 | Gesture | Hand | Action |
 |---------|------|--------|
-| ☝️ Index Finger | **Right** | **Slice** — swing your index tip through fruits to cut them |
+| ☝️ Index Finger | **Right** | Slice fruits by moving the index tip through them |
 
-> 💥 Slicing a **BOMB** deducts 5 points and counts as a miss. Use Shield to deflect.
+> Slicing a **BOMB** deducts 5 points and counts as a miss unless the shield is active.
 
 ### Modifiers
 
 | Gesture | Hand | Action |
 |---------|------|--------|
-| ✊ Fist | **Left** | **Shield** — deflects the next bomb hit (5-second cooldown after use) |
-| 👋 Open Palm | **Left** | **Slow Motion** — slows fruit movement for up to 2 seconds (3–4 s cooldown) |
+| ✊ Fist | **Left** | Shield the next bomb hit, with a 5-second cooldown |
+| 4 Finger Up | **Left** | Slow motion for up to 2 seconds, then a 3-4 second cooldown |
 
 ### Game Control
 
 | Gesture | Both Hands | Hold Duration | Action |
 |---------|-----------|--------------|--------|
-| 👍 + 👍 Both Thumbs Up | Left + Right | 2.0 s | **Restart Game** |
+| 👍 + 👍 Both Thumbs Up | Left + Right | 2.0 s | Restart the game |
 
 ### Navigation
 
 | Gesture | Hand | Action |
 |---------|------|--------|
-| 🤟 Index + Middle + Ring | **Right** | **Return to Menu** |
+| 🤟 Index + Middle + Ring | **Left** | Return to the menu |
 
 ---
 
@@ -177,92 +174,36 @@ Point your right-hand cursor at any toolbar button at the top of the screen and 
 
 | Gesture | Hand | Action |
 |---------|------|--------|
-| ☝️ Index Finger | **Right** | **Write** inside the orange OCR zone |
+| ☝️ Index Finger | **Right** | Write inside the OCR page area |
 
-### Recognition & Output
+### Recognition and Output
 
 | Gesture | Hand | Hold Duration | Action |
 |---------|------|--------------|--------|
-| 👋 Open Palm | **Left** | 1.0 s | **Recognize** handwriting (runs OCR on the current canvas) |
-| 👍 Thumb Up | **Left** | instant | **Copy** recognized text to clipboard |
-| 🤘 Rock Sign (Index + Pinky) | **Left** | instant | **Read aloud** recognized text via text-to-speech |
+| 👋 Open Palm | **Left** | 0.5 s | Recognize the handwriting on the current canvas |
+| 👍 Thumb Up | **Left** | instant | Copy the recognized text to the clipboard |
+| 🤘 Rock Sign | **Left** | instant | Read the recognized text aloud |
 
 ### Canvas
 
 | Gesture | Both Hands | Hold Duration | Action |
 |---------|-----------|--------------|--------|
-| 👋 + 👋 Both Open Palms | Left + Right | 2.0 s | **Clear OCR Canvas** |
+| 👋 + 👋 Both Open Palms | Left + Right | 2.0 s | Clear the OCR canvas |
 
 ### Navigation
 
 | Gesture | Hand | Action |
 |---------|------|--------|
-| 🤟 Index + Middle + Ring | **Right** | **Return to Menu** |
-
----
-
-## 🎙️ Voice Mode
-
-> Activated by selecting **Voice Mode** from the menu.
-
-### Listening Control
-
-| Gesture | Hand | Action |
-|---------|------|--------|
-| 👋 Open Palm | **Left** | **Start Listening** for a voice command |
-| ✊ Fist | **Left** | **Stop Listening** |
-| 👍 Thumb Up | **Left** | **Repeat Last Command** (re-applies the most recent recognized command) |
-
-### Supported Voice Commands
-
-| Say... | Effect |
-|--------|--------|
-| "clear" | Clear the canvas |
-| "save" | Save the current drawing |
-| "eraser" | Switch to eraser mode |
-| "red" / "green" / "blue" / "black" / "purple" / "orange" | Change pen color |
-| "piano" | Switch to Piano mode |
-| "game" | Switch to Game mode |
-
-### Navigation
-
-| Gesture | Hand | Action |
-|---------|------|--------|
-| 🤟 Index + Middle + Ring | **Right** | **Return to Menu** |
-
----
-
-## 🌙 System-Wide Behaviours
-
-| Trigger | Action |
-|---------|--------|
-| No hand visible for **3 seconds** | System enters **Idle** mode — screen dims with "SYSTEM IDLE" message |
-| Any hand detected | Wakes from Idle automatically |
-| **Q** / **Esc** key | Quit application |
-
-### Keyboard Shortcuts (Alternative to gestures)
-
-| Key | Action |
-|-----|--------|
-| `C` | Clear canvas |
-| `S` | Save drawing |
-| `N` | New page |
-| `[` | Previous page |
-| `]` | Next page |
-| `P` | Toggle Piano mode |
-| `G` | Toggle Game mode |
-| `O` | Switch to OCR mode |
-| `V` | Switch to Voice mode |
-| `Q` / `Esc` | Quit |
+| 🤟 Index + Middle + Ring | **Left** | Return to the menu |
 
 ---
 
 ## 📐 Finger Detection Reference
 
-> The system determines which fingers are "up" by comparing tip position vs. PIP joint:
+> The detector determines which fingers are up by comparing tip position against the PIP joint:
 
 | Finger | "Up" condition |
-|--------|---------------|
+|--------|-----------------|
 | Index | Tip above PIP joint (landmark 8 above landmark 6) |
 | Middle | Tip above PIP joint (landmark 12 above landmark 10) |
 | Ring | Tip above PIP joint (landmark 16 above landmark 14) |
@@ -270,7 +211,7 @@ Point your right-hand cursor at any toolbar button at the top of the screen and 
 | Thumb (Right hand) | Tip X > IP joint X |
 | Thumb (Left hand) | Tip X < IP joint X |
 
-> **Pinch distance** (thumb tip ↔ index tip) controls brush size: range 20–150 px maps to brush size 3–36 px.
+> **Pinch distance** (thumb tip ↔ index tip) controls brush size. The detector maps roughly 20–150 px to brush sizes 3–36 px.
 
 ---
 

@@ -1,10 +1,13 @@
 from __future__ import annotations
 
 from dataclasses import dataclass
-
-
+import datetime
+from typing import Optional
+import pyttsx3
+import speech_recognition as sr
 import queue
 import threading
+import traceback
 
 
 @dataclass
@@ -18,40 +21,75 @@ class VoiceCommandListener:
         self.result_queue = queue.Queue()
         self.cancel_listening = False
         self.is_currently_listening = False
-        
-        try:
-            import speech_recognition as sr
-        except ImportError:  # pragma: no cover - optional dependency
-            self.sr = None
-            self.error = "SpeechRecognition is not installed."
-        else:
-            self.sr = sr
-            self.error = ""
+        self.sr = sr
+        self.error = ""
+        self.audio = None
 
-        try:
-            import pyttsx3
-        except ImportError:  # pragma: no cover - optional dependency
-            self.tts = None
-        else:
-            self.tts = pyttsx3.init()
+        self.tts = pyttsx3.init()
+        self.tts_queue = queue.Queue()
+        threading.Thread(target=self._tts_worker, daemon=True).start()
 
-    def start_listening_background(self) -> None:
+    def _tts_worker(self):
+        while True:
+            text = self.tts_queue.get()
+
+            if text is None:
+                break
+
+            try:
+                self.tts.say(text)
+                self.tts.runAndWait()
+            except Exception as e:
+                print(f"Error occurred while speaking: {e}")
+
+    def start_listening_background(self):
+        print("Starting background listening...")
         if self.is_currently_listening:
             return
+
         self.cancel_listening = False
         self.is_currently_listening = True
-        
-        def _worker():
-            res = self.listen_once()
-            if not self.cancel_listening:
-                self.result_queue.put(res)
-            self.is_currently_listening = False
-            
-        threading.Thread(target=_worker, daemon=True).start()
 
-    def stop_listening_background(self) -> None:
-        self.cancel_listening = True
-        self.is_currently_listening = False
+        def worker():
+            recognizer = sr.Recognizer()
+
+            with sr.Microphone(device_index=0) as source:
+                recognizer.adjust_for_ambient_noise(source, duration=1)
+                recognizer.dynamic_energy_threshold = False
+                recognizer.energy_threshold = 300
+                recognizer.pause_threshold = 1.0
+                recognizer.non_speaking_duration = 0.5
+                print("Listening for voice command...")
+                audio = recognizer.record(source, duration=5)
+                audio_data = audio.get_wav_data()
+                output_path = (
+                    f"{datetime.datetime.now().strftime('%Y-%m-%d_%H-%M-%S')}.wav"
+                )
+                with open(output_path, "wb") as f:
+                    f.write(audio_data)
+            try:
+                command = recognizer.recognize_google(audio).lower()
+                print(f"Recognized command: {command}")
+                self.result_queue.put(VoiceResult(command, command))
+            except sr.WaitTimeoutError:
+                print("No speech detected within the timeout.")
+                self.result_queue.put(
+                    VoiceResult("", "No speech detected within the timeout.")
+                )
+            except sr.UnknownValueError:
+                print("Could not understand the speech.")
+                self.result_queue.put(VoiceResult("", "Could not understand the speech."))
+
+            except sr.RequestError as e:
+                print(f"Speech service unavailable: {e}")
+                self.result_queue.put(VoiceResult("", f"Speech service unavailable: {e}"))
+
+            except Exception as e:
+                print(f"An unexpected error occurred: {e}")
+                traceback.print_exc()
+            self.is_currently_listening = False
+
+        threading.Thread(target=worker, daemon=True).start()
 
     def get_result(self) -> Optional[VoiceResult]:
         try:
@@ -59,25 +97,5 @@ class VoiceCommandListener:
         except queue.Empty:
             return None
 
-    def listen_once(self, timeout: int = 4, phrase_time_limit: int = 4) -> VoiceResult:
-        if self.sr is None:
-            return VoiceResult("", self.error + " Run: python -m pip install SpeechRecognition")
-
-        recognizer = self.sr.Recognizer()
-        try:
-            with self.sr.Microphone() as source:
-                recognizer.adjust_for_ambient_noise(source, duration=0.5)
-                audio = recognizer.listen(source, timeout=timeout, phrase_time_limit=phrase_time_limit)
-            command = recognizer.recognize_google(audio).lower()
-        except Exception as exc:  # pragma: no cover - microphone and network dependent
-            return VoiceResult("", f"Voice command failed: {exc}")
-        return VoiceResult(command, f"Heard: {command}")
-
-    def speak(self, text: str) -> None:
-        if not self.tts:
-            return
-        try:
-            self.tts.say(text)
-            self.tts.runAndWait()
-        except Exception:
-            pass
+    def speak(self, text):
+        self.tts_queue.put(text)

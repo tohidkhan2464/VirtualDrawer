@@ -145,6 +145,25 @@ class VirtualPiano:
             frame, (bar_x, bar_y), (bar_x + bar_w, bar_y + bar_h), (255, 255, 255), 1
         )
 
+        # Draw Octave
+        octave_names = {
+            -2: "C2",
+            -1: "C3",
+            0: "C4",
+            1: "C5",
+            2: "C6",
+        }
+        octave_text = f"Octave: {octave_names[self.octave_offset]}"
+        cv2.putText(
+            frame,
+            octave_text,
+            (300, 30),
+            cv2.FONT_HERSHEY_SIMPLEX,
+            0.5,
+            (200, 200, 200),
+            1,
+        )
+
         # Draw Instrument
         x = 35
         y = 90

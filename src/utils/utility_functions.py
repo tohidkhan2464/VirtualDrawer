@@ -96,10 +96,4 @@ def handle_key(
         board.mode = "ocr"
         board.say("OCR mode")
         app_state = "active"
-    elif key == ord("v"):
-        if voice is None:
-            voice = VoiceCommandListener()
-        board.mode = "voice"
-        board.say("Voice mode")
-        app_state = "active"
     return ocr_canvas, voice, app_state

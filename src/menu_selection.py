@@ -1,6 +1,5 @@
 from __future__ import annotations
 from typing import  Optional, Tuple
-
 import cv2
 import numpy as np
 
@@ -13,7 +12,6 @@ MENU_OPTIONS = (
     ("piano", "Piano"),
     ("game", "Game"),
     ("ocr", "OCR Mode"),
-    ("voice", "Voice Mode"),
 )
 
 
@@ -32,12 +30,6 @@ class MenuSelection:
         sy = self.height / base_h
         scale = min(sx, sy)
         return max(1, int(value * scale))
-    
-    
-    def say(self, text: str, frames: int = 70) -> None:
-        self.message = text
-        self.message_frames = frames
-
 
     def _draw_message(self, frame: np.ndarray) -> None:
         text_size, _ = cv2.getTextSize(self.message, cv2.FONT_HERSHEY_SIMPLEX, 0.78, 2)
@@ -151,7 +143,6 @@ class MenuSelection:
             "piano": "Play virtual notes",
             "game": "Slice spawning fruits",
             "ocr": "Recognize text",
-            "voice": "Voice commands",
         }
 
         # DRAW CARDS
@@ -377,32 +368,6 @@ class MenuSelection:
                     cv2.LINE_AA,
                 )
 
-            # VOICE ICON
-            elif mode == "voice":
-
-                cv2.circle(
-                    frame,
-                    (center_x, center_y - self.scale(15)),
-                    self.scale(20),
-                    (220, 220, 220),
-                    self.scale(2),
-                )
-
-                cv2.line(
-                    frame,
-                    (center_x, center_y + self.scale(5)),
-                    (center_x, center_y + self.scale(40)),
-                    (220, 220, 220),
-                    self.scale(3),
-                )
-
-                cv2.line(
-                    frame,
-                    (center_x - self.scale(18), center_y + self.scale(40)),
-                    (center_x + self.scale(18), center_y + self.scale(40)),
-                    (220, 220, 220),
-                    self.scale(3),
-                )
 
         # CURSOR
         if cursor:
