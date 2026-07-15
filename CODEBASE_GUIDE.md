@@ -48,15 +48,6 @@ Ignores Python cache, virtual environments, and generated drawing exports in `sa
 
 ## Runtime Data And Media
 
-### `assets/fruits/`
-Asset folder reserved for fruit graphics. It is currently empty.
-
-### `assets/icons/`
-Asset folder reserved for UI icons. It is currently empty.
-
-### `assets/piano/`
-Asset folder reserved for piano note samples. It is currently empty, so the piano module falls back to generated tones when `pygame` is installed.
-
 ### `assets/sounds/`
 Asset folder reserved for extra sound effects. It is currently empty.
 

@@ -596,6 +596,8 @@ def main() -> None:
             )
 
             cv2.imshow("Virtual Gesture Studio", output)
+            if cv2.getWindowProperty("Gesture Detector", cv2.WND_PROP_VISIBLE) < 1:
+                break
 
             key = cv2.waitKey(1) & 0xFF
             if key in (27, ord("q")):

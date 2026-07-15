@@ -7,6 +7,8 @@ import time
 import cv2
 import numpy as np
 import pygame
+from .utils.path import resource_path
+
 
 Point = Tuple[int, int]
 Color = Tuple[int, int, int]
@@ -54,14 +56,14 @@ class SoundManager:
         self.enabled = True
         self.music_playing = False
         try:
-            self.slice = pygame.mixer.Sound("assets/sounds/slice.wav")
-            self.bomb = pygame.mixer.Sound("assets/sounds/explosion.wav")
-            self.combo = pygame.mixer.Sound("assets/sounds/combo.wav")
-            self.shield = pygame.mixer.Sound("assets/sounds/shield.wav")
-            self.spawn = pygame.mixer.Sound("assets/sounds/spawn.wav")
-            self.slow = pygame.mixer.Sound("assets/sounds/slow.wav")
-            self.gameover = pygame.mixer.Sound("assets/sounds/gameover.wav")
-            pygame.mixer.music.load("assets/music/background.mp3")
+            self.slice = pygame.mixer.Sound(resource_path("assets/sounds/slice.wav"))
+            self.bomb = pygame.mixer.Sound(resource_path("assets/sounds/explosion.wav"))
+            self.combo = pygame.mixer.Sound(resource_path("assets/sounds/combo.wav"))
+            self.shield = pygame.mixer.Sound(resource_path("assets/sounds/shield.wav"))
+            self.spawn = pygame.mixer.Sound(resource_path("assets/sounds/spawn.wav"))
+            self.slow = pygame.mixer.Sound(resource_path("assets/sounds/slow.wav"))
+            self.gameover = pygame.mixer.Sound(resource_path("assets/sounds/gameover.wav"))
+            pygame.mixer.music.load(resource_path("assets/music/background.mp3"))
             pygame.mixer.music.set_volume(0.35)
             # pygame.mixer.music.play(-1)
 

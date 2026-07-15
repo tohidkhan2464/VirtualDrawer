@@ -5,7 +5,7 @@ from typing import List, Optional, Tuple
 import time
 import cv2
 import numpy as np
-
+from .utils.path import resource_path
 from .voice_commands import VoiceCommandListener
 
 Point = Tuple[int, int]

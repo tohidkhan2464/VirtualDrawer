@@ -6,3 +6,6 @@ env/
 saved_drawings/*.png
 saved_drawings/*.jpg
 saved_drawings/*.jpeg
+dist/*
+build/*
+GestureDetector.spec

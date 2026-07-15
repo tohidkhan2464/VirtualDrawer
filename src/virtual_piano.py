@@ -36,8 +36,7 @@ class VirtualPiano:
         "C2": 523.25,
     }
 
-    def __init__(self, asset_dir: str = "assets/piano") -> None:
-        self.asset_dir = Path(asset_dir)
+    def __init__(self) -> None:
         self.keys: List[PianoKey] = []
         self.last_note: Optional[str] = None
         self.cooldown = 0

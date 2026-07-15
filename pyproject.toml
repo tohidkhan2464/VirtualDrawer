@@ -6,7 +6,7 @@ authors = ["Tohid Khan"]
 readme = "README.md"
 
 [tool.poetry.dependencies]
-python = "^3.11"
+python = ">=3.11,<3.12"
 opencv-python = ">=4.8.0"
 numpy = ">=1.24.0"
 pygame = ">=2.5.0"
@@ -39,3 +39,8 @@ exclude = '''
 [build-system]
 requires = ["poetry-core"]
 build-backend = "poetry.core.masonry.api"
+
+[dependency-groups]
+dev = [
+    "pyinstaller (>=6.21.0,<7.0.0)"
+]
