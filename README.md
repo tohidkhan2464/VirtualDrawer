@@ -92,3 +92,53 @@ VirtualGestureStudio/
 ├── saved_drawings/
 └── requirements.txt
 ```
+
+
+<!-- [tool.poetry]
+name = "virtual_drawer"
+version = "0.1.0"
+description = ""
+authors = ["Tohid Khan"]
+readme = "README.md"
+
+[[tool.poetry.source]]
+name = "pytorch-cpu"
+url = "https://download.pytorch.org/whl/cpu"
+priority = "explicit"
+
+[tool.poetry.dependencies]
+python = ">=3.11,<3.12"
+numpy = ">=1.24.0"
+pygame = ">=2.5.0"
+pyautogui = ">=0.9.54"
+pillow = ">=10.0.0"
+pyttsx3 = ">=2.90"
+mediapipe = "0.10.14"
+pyaudio = "^0.2.14"
+torch = { source = "pytorch-cpu", version = "2.5.1" }
+
+[tool.black]
+line-length = 90
+include = '\.pyi?$'
+exclude = '''
+/(
+    \.git
+  | \.hg
+  | \.mypy_cache
+  | \.tox
+  | \.venv
+  | _build
+  | buck-out
+  | build
+  | dist
+)/
+'''
+
+[build-system]
+requires = ["poetry-core"]
+build-backend = "poetry.core.masonry.api"
+
+[dependency-groups]
+dev = [
+    "pyinstaller (>=6.21.0,<7.0.0)"
+] -->

@@ -48,7 +48,7 @@ class VirtualPiano:
         self.volume = 0.7
 
         self.octave_offset = 0
-        self.instruments = ["Classic", "Organ", "Retro", "Triangle"]
+        self.instruments = ["Triangle", "Organ", "Retro", "Classic"]
         self.instrument_index = 0
         self.active_channels: Dict[str, object] = {}
         self.sustain = False

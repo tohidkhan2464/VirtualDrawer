@@ -59,9 +59,9 @@ class SoundManager:
             self.slice = pygame.mixer.Sound(resource_path("assets/sounds/slice.wav"))
             self.bomb = pygame.mixer.Sound(resource_path("assets/sounds/explosion.wav"))
             self.combo = pygame.mixer.Sound(resource_path("assets/sounds/combo.wav"))
-            self.shield = pygame.mixer.Sound(resource_path("assets/sounds/shield.wav"))
+            # self.shield = pygame.mixer.Sound(resource_path("assets/sounds/shield.wav"))
             self.spawn = pygame.mixer.Sound(resource_path("assets/sounds/spawn.wav"))
-            self.slow = pygame.mixer.Sound(resource_path("assets/sounds/slow.wav"))
+            # self.slow = pygame.mixer.Sound(resource_path("assets/sounds/slow.wav"))
             self.gameover = pygame.mixer.Sound(resource_path("assets/sounds/gameover.wav"))
             pygame.mixer.music.load(resource_path("assets/music/background.mp3"))
             pygame.mixer.music.set_volume(0.35)
@@ -105,10 +105,10 @@ class FruitNinjaMiniGame:
         self.last_slice_time = 0
         self.message = ""
         self.message_time = 0
-        self.last_shield_trigger_time = 0
-        self.shield_active = False
-        self.slow_mo_start_time = None
-        self.slow_mo_cooldown_end = 0
+        # self.last_shield_trigger_time = 0
+        # self.shield_active = False
+        # self.slow_mo_start_time = None
+        # self.slow_mo_cooldown_end = 0
         self.screen_shake = 0
         self.countdown = 3
         self.countdown_start = time.time()
@@ -126,10 +126,10 @@ class FruitNinjaMiniGame:
         self.particles.clear()
         self.floating.clear()
         self.trail.clear()
-        self.last_shield_trigger_time = 0
-        self.shield_active = False
-        self.slow_mo_start_time = None
-        self.slow_mo_cooldown_end = 0
+        # self.last_shield_trigger_time = 0
+        # self.shield_active = False
+        # self.slow_mo_start_time = None
+        # self.slow_mo_cooldown_end = 0
         self.message = "SLICE!"
         self.message_time = time.time() + 2
         if self.sound.enabled:
@@ -184,9 +184,9 @@ class FruitNinjaMiniGame:
             color, name = random.choice(palette)
             radius = random.randint(20, 32)
 
-        x = random.randint(80, width - 80)
+        x = random.randint(100, width - 100)
         vx = random.uniform(-4, 4)
-        vy = random.uniform(-18, -13)
+        vy = random.uniform(-18, -16)
         spin = random.uniform(-10, 10)
         angle = random.uniform(0, 360)
         self.fruits.append(
@@ -264,12 +264,12 @@ class FruitNinjaMiniGame:
         if self.screen_shake > 0:
             self.screen_shake -= 1
 
-    def update_fruit_physics(self, slow_motion=False):
-        dt = 0.35 if slow_motion else 1.0
+    def update_fruit_physics(self):
+        dt = 0.7
         for fruit in self.fruits:
             fruit.x += fruit.vx * dt
             fruit.y += fruit.vy * dt
-            fruit.vy += 0.42 * dt
+            fruit.vy += 0.30 * dt
             fruit.angle = (fruit.angle + fruit.spin) % 360
             if fruit.is_bomb:
                 self.bomb_smoke(fruit)
@@ -326,8 +326,8 @@ class FruitNinjaMiniGame:
         width: int,
         height: int,
         cutter: Optional[Point],
-        shield_pressed: bool = False,
-        slow_mo_pressed: bool = False,
+        # shield_pressed: bool = False,
+        # slow_mo_pressed: bool = False,
     ):
         if not self.running:
             self.reset()
@@ -336,29 +336,29 @@ class FruitNinjaMiniGame:
         now = time.time()
 
         # Slow Motion
-        slow_motion = False
-        if slow_mo_pressed:
-            if self.slow_mo_start_time is None:
-                if now >= self.slow_mo_cooldown_end:
-                    self.slow_mo_start_time = now
-                    self.sound.play(self.sound.slow)
+        # slow_motion = False
+        # if slow_mo_pressed:
+        #     if self.slow_mo_start_time is None:
+        #         if now >= self.slow_mo_cooldown_end:
+        #             self.slow_mo_start_time = now
+        #             self.sound.play(self.sound.slow)
 
-            else:
-                elapsed = now - self.slow_mo_start_time
-                if elapsed <= 2.0:
-                    slow_motion = True
-                else:
-                    self.slow_mo_cooldown_end = now + 4
-                    self.slow_mo_start_time = None
+        #     else:
+        #         elapsed = now - self.slow_mo_start_time
+        #         if elapsed <= 2.0:
+        #             slow_motion = True
+        #         else:
+        #             self.slow_mo_cooldown_end = now + 4
+        #             self.slow_mo_start_time = None
 
-        else:
-            if self.slow_mo_start_time is not None:
-                self.slow_mo_cooldown_end = now + 3
-                self.slow_mo_start_time = None
+        # else:
+        #     if self.slow_mo_start_time is not None:
+        #         self.slow_mo_cooldown_end = now + 3
+        #         self.slow_mo_start_time = None
 
         # Shield
-        shield_cd = (now - self.last_shield_trigger_time) < 5
-        self.shield_active = shield_pressed and not shield_cd
+        # shield_cd = (now - self.last_shield_trigger_time) < 5
+        # self.shield_active = shield_pressed and not shield_cd
 
         # Spawn Fruits
         self.spawn_controller(width, height)
@@ -367,7 +367,7 @@ class FruitNinjaMiniGame:
         self.update_trail(cutter)
 
         # Physics
-        self.update_fruit_physics(slow_motion)
+        self.update_fruit_physics()
 
         # Combo Timer
         self.update_combo()
@@ -382,15 +382,15 @@ class FruitNinjaMiniGame:
                 hit = dx * dx + dy * dy < (fruit.radius + 18) ** 2
             if hit:
                 if fruit.is_bomb:
-                    if self.shield_active:
-                        self.shield_deflect(fruit)
-                        continue
-                    else:
-                        self.score = max(0, self.score - 5)
-                        self.misses += 1
-                        self.combo = 0
-                        self.bomb_explosion(fruit)
-                        continue
+                    # if self.shield_active:
+                    #     self.shield_deflect(fruit)
+                    #     continue
+                    # else:
+                    self.score = max(0, self.score - 5)
+                    self.misses += 1
+                    self.combo = 0
+                    self.bomb_explosion(fruit)
+                    continue
                 else:
                     self.fruit_slice(fruit)
                     continue
@@ -436,10 +436,10 @@ class FruitNinjaMiniGame:
 
     def draw(self, frame: np.ndarray):
         h, w = frame.shape[:2]
-        now = time.time()
+        # now = time.time()
 
         # Background
-        self.draw_background(frame)
+        # self.draw_background(frame)
 
         # Fruits
         self.draw_fruits(frame)
@@ -451,8 +451,8 @@ class FruitNinjaMiniGame:
         self.draw_trail(frame)
 
         # Shield
-        if self.shield_active and self.trail:
-            self.draw_shield(frame)
+        # if self.shield_active and self.trail:
+        #     self.draw_shield(frame)
 
         # Floating +1
         self.draw_floating(frame)
@@ -460,7 +460,7 @@ class FruitNinjaMiniGame:
         # HUD
         self.draw_hud(frame)
         self.draw_combo_banner(frame)
-        self.draw_slow_motion(frame)
+        # self.draw_slow_motion(frame)
 
         # Messages
         self.draw_messages(frame)
@@ -532,26 +532,26 @@ class FruitNinjaMiniGame:
             (50, 180, 255),
             2,
         )
-        shield = max(0, 5 - (time.time() - self.last_shield_trigger_time))
-        slow = max(0, self.slow_mo_cooldown_end - time.time())
-        cv2.putText(
-            frame,
-            f"Shield {'READY' if shield==0 else f'{shield:.1f}s'}",
-            (25, 110),
-            cv2.FONT_HERSHEY_SIMPLEX,
-            0.55,
-            (255, 220, 120),
-            2,
-        )
-        cv2.putText(
-            frame,
-            f"Slow {'READY' if slow==0 else f'{slow:.1f}s'}",
-            (220, 110),
-            cv2.FONT_HERSHEY_SIMPLEX,
-            0.55,
-            (150, 255, 255),
-            2,
-        )
+        # shield = max(0, 5 - (time.time() - self.last_shield_trigger_time))
+        # slow = max(0, self.slow_mo_cooldown_end - time.time())
+        # cv2.putText(
+        #     frame,
+        #     f"Shield {'READY' if shield==0 else f'{shield:.1f}s'}",
+        #     (25, 110),
+        #     cv2.FONT_HERSHEY_SIMPLEX,
+        #     0.55,
+        #     (255, 220, 120),
+        #     2,
+        # )
+        # cv2.putText(
+        #     frame,
+        #     f"Slow {'READY' if slow==0 else f'{slow:.1f}s'}",
+        #     (220, 110),
+        #     cv2.FONT_HERSHEY_SIMPLEX,
+        #     0.55,
+        #     (150, 255, 255),
+        #     2,
+        # )
         if self.combo >= 2:
             cv2.putText(
                 frame,

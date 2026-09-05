@@ -27,7 +27,6 @@ class Button:
         return left <= x <= right and top <= y <= bottom
 
 
-# voice = VoiceCommandListener()
 
 
 class DrawingCanvas:

@@ -43,16 +43,23 @@ def parse_args() -> argparse.Namespace:
 def main() -> None:
     args = parse_args()
     cv2.namedWindow("Virtual Gesture Studio", cv2.WINDOW_NORMAL)
+
     cv2.setWindowProperty(
         "Virtual Gesture Studio",
         cv2.WND_PROP_FULLSCREEN,
-        cv2.WINDOW_NORMAL,
+        cv2.WINDOW_FULLSCREEN,
     )
+    # cv2.namedWindow("Virtual Gesture Studio", cv2.WINDOW_NORMAL)
+    # cv2.setWindowProperty(
+    #     "Virtual Gesture Studio",
+    #     cv2.WND_PROP_FULLSCREEN,
+    #     cv2.WINDOW_NORMAL,
+    # )
 
-    cv2.namedWindow("Virtual Gesture Studio", cv2.WINDOW_NORMAL)
+    # cv2.namedWindow("Virtual Gesture Studio", cv2.WINDOW_NORMAL)
     cv2.resizeWindow("Virtual Gesture Studio", 1920, 1080)
     # cap = cv2.VideoCapture(args.camera)
-    cap = cv2.VideoCapture(args.camera, cv2.CAP_MSMF)
+    cap = cv2.VideoCapture(args.camera, cv2.CAP_V4L2)
 
     cap.set(cv2.CAP_PROP_FOURCC, cv2.VideoWriter_fourcc(*"MJPG"))
     cap.set(cv2.CAP_PROP_FRAME_WIDTH, args.width)
@@ -596,7 +603,7 @@ def main() -> None:
             )
 
             cv2.imshow("Virtual Gesture Studio", output)
-            if cv2.getWindowProperty("Gesture Detector", cv2.WND_PROP_VISIBLE) < 1:
+            if cv2.getWindowProperty("Virtual Gesture Studio", cv2.WND_PROP_VISIBLE) < 1:
                 break
 
             key = cv2.waitKey(1) & 0xFF
