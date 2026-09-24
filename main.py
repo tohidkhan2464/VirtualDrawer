@@ -16,7 +16,6 @@ from src.hand_tracker import HandTracker
 
 # from src.handwriting_ocr import HandwritingOCR
 from src.virtual_piano import VirtualPiano
-from src.voice_commands import VoiceCommandListener
 from src.utils.utility_functions import (
     draw_or_erase,
     menu_selection_for_cursor,
@@ -73,10 +72,9 @@ def main() -> None:
     # Explicitly track up to 2 hands
     tracker = HandTracker(max_hands=2)
     detector = GestureDetector()
-    voice = VoiceCommandListener()
     menu = MenuSelection()
-    canvas = DrawingCanvas(voice=voice)
-    ocr_canvas = OCRCanvas(voice=voice)
+    canvas = DrawingCanvas()
+    ocr_canvas = OCRCanvas()
 
     piano = VirtualPiano()
     game = FruitNinjaMiniGame()
@@ -119,9 +117,6 @@ def main() -> None:
     try:
         while True:
             ok, frame = cap.read()
-            if not ok:
-                voice.speak("Camera frame unavailable")
-                continue
 
             frame = cv2.flip(frame, 1)
             height, width = frame.shape[:2]
@@ -147,7 +142,6 @@ def main() -> None:
                 if app_state != "menu":
                     game.sound.stop_music()
                     app_state = "menu"
-                    voice.speak("System Idle")
 
             if not args.no_landmarks:
                 tracker.draw_landmarks(frame, hands)
@@ -206,7 +200,6 @@ def main() -> None:
                         else:
                             game.sound.stop_music()
                         app_state = "active"
-                        voice.speak(f"{menu_selection.upper()} mode")
 
                 # ------------------- STATE: ACTIVE -------------------
                 else:
@@ -217,25 +210,10 @@ def main() -> None:
                         # board.set_mode("draw")
                         canvas.stop_stroke()
                         ocr_canvas.stop_stroke()
-                        voice.speak("Mode menu")
                         menu_cursor = None
                     else:
                         # 1. Mode: Drawing Board
                         if menu.mode == "draw":
-
-                            if state.left_name == "open_hand":
-                                if not voice.is_currently_listening:
-                                    voice.start_listening_background()
-
-                            if voice.is_currently_listening:
-                                result = voice.get_result()
-
-                                if result is not None:
-                                    if result.command:
-                                        voice.speak(f"You said : {result.command}")
-                                        canvas.apply_voice_command(result.command)
-                                    else:
-                                        voice.speak(result.message)
 
                             # Left Fist -> Undo (0.8s hold)
                             if (
@@ -278,10 +256,8 @@ def main() -> None:
                                 if not pinky_toggled:
                                     if canvas.tool == "eraser":
                                         canvas.tool = "pencil"
-                                        voice.speak("Drawing Mode")
                                     else:
                                         canvas.tool = "eraser"
-                                        voice.speak("Eraser Mode")
                                     pinky_toggled = True
                             else:
                                 pinky_toggled = False
@@ -321,7 +297,6 @@ def main() -> None:
                                     canvas.tool = "pencil"
 
                                     canvas.show_color_menu = False
-                                    voice.speak(f"{hovered_color.title()} selected")
 
                             # Handle Toolbar Button Clicks
                             action = canvas.handle_toolbar(
@@ -347,14 +322,12 @@ def main() -> None:
                             if state.left_name == "four_fingers_up":
                                 if now - last_volume_change_time > 0.5:
                                     piano.set_volume(+0.1)
-                                    voice.speak(f"Volume {int(piano.volume*100)}%")
                                     last_volume_change_time = now
 
                             # Left Fist -> Volume -
                             elif state.left_name == "closed_fist":
                                 if now - last_volume_change_time > 0.5:
                                     piano.set_volume(-0.1)
-                                    voice.speak(f"Volume {int(piano.volume*100)}%")
                                     last_volume_change_time = now
 
                             # ---------------- Octave ----------------
@@ -363,14 +336,12 @@ def main() -> None:
                             elif state.left_name == "menu_cursor":
                                 if now - last_octave_change_time > 1:
                                     piano.change_octave(+1)
-                                    voice.speak(f"Octave {piano.octave_offset:+d}")
                                     last_octave_change_time = now
 
                             # Pinky Up
                             elif state.left_name == "pinky_up":
                                 if now - last_octave_change_time > 1:
                                     piano.change_octave(-1)
-                                    voice.speak(f"Octave {piano.octave_offset:+d}")
                                     last_octave_change_time = now
 
                             # ---------------- Instrument ----------------
@@ -378,7 +349,6 @@ def main() -> None:
                             elif state.left_name == "rock":
                                 if now - last_instrument_change_time > 1:
                                     piano.next_instrument()
-                                    voice.speak(piano.instruments[piano.instrument_index])
                                     last_instrument_change_time = now
 
                         # 3. Mode: Fruit Ninja
@@ -404,8 +374,8 @@ def main() -> None:
                                     if state.right_name == "draw"
                                     else None
                                 ),
-                                shield_pressed=(state.left_name == "closed_fist"),
-                                slow_mo_pressed=(state.left_name == "four_fingers_up"),
+                                # shield_pressed=(state.left_name == "closed_fist"),
+                                # slow_mo_pressed=(state.left_name == "four_fingers_up"),
                             )
 
                         # 4. Mode: Handwriting OCR
@@ -434,7 +404,6 @@ def main() -> None:
                                         ocr_canvas.get_page()
                                     )
 
-                                    voice.speak(msg)
                                     ocr_text_result = " ".join(r.text for r in results)
                                     ocr_canvas.recognized_text = ocr_text_result
                                     if results:
@@ -444,7 +413,6 @@ def main() -> None:
                                         ) * 100
 
                                     else:
-                                        voice.speak("No text recognized")
                                         ocr_canvas.confidence = 0
 
                                     gesture_triggered["left_open_hand"] = True
@@ -457,10 +425,6 @@ def main() -> None:
                                         success = ocr_canvas.copy_to_clipboard(
                                             ocr_canvas.recognized_text
                                         )
-                                        if success:
-                                            voice.speak("Copied text to clipboard!")
-                                        else:
-                                            voice.speak("Failed to copy text")
                                     ocr_copied = True
                             else:
                                 ocr_copied = False
@@ -468,7 +432,7 @@ def main() -> None:
                             # Read Aloud (Left Hand Rock Sign)
                             if state.left_name == "rock":
                                 if ocr_canvas.recognized_text:
-                                    voice.speak(ocr_canvas.recognized_text)
+                                    v#oice.speak(ocr_canvas.recognized_text)
 
                             # Clear OCR Area (Both Open Palms held for 2.0s)
                             if state.right_name == "rock":
@@ -476,7 +440,6 @@ def main() -> None:
                                 ocr_canvas.last_point = None
                                 ocr_canvas.is_drawing = False
                                 ocr_canvas.recognized_text = ""
-                                voice.speak("OCR Canvas Cleared")
                                 gesture_triggered["both_open_palms"] = True
 
             # Draw active mode HUD and overlays
@@ -610,8 +573,8 @@ def main() -> None:
             if key in (27, ord("q")):
                 break
             if key:
-                ocr_canvas, voice, app_state = handle_key(
-                    key, canvas, ocr_canvas, voice, game, app_state
+                ocr_canvas, app_state = handle_key(
+                    key, canvas, ocr_canvas, game, app_state
                 )
     finally:
         tracker.close()

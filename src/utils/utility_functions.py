@@ -6,7 +6,6 @@ from src.drawing_canvas import DrawingCanvas
 from src.fruit_ninja import FruitNinjaMiniGame
 from src.gesture_detector import GestureState
 from src.ocr_canvas import OCRCanvas
-from src.voice_commands import VoiceCommandListener
 
 
 def draw_or_erase(
@@ -54,9 +53,6 @@ def activate_mode(
     elif mode == "ocr":
         menu.mode = "ocr"
         menu.set_mode("ocr")
-    elif mode == "voice":
-        menu.mode = "voice"
-        menu.set_mode("voice")
     board.stop_stroke()
 
 
@@ -64,7 +60,6 @@ def handle_key(
     key: int,
     board: DrawingCanvas,
     ocr_canvas: Optional[OCRCanvas],
-    voice: Optional[VoiceCommandListener],
     game: FruitNinjaMiniGame,
     app_state: str,
 ):
@@ -96,4 +91,4 @@ def handle_key(
         board.mode = "ocr"
         board.say("OCR mode")
         app_state = "active"
-    return ocr_canvas, voice, app_state
+    return ocr_canvas, app_state

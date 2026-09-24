@@ -5,7 +5,6 @@ from datetime import datetime
 from pathlib import Path
 from typing import Dict, List, Optional, Tuple
 import random
-from .voice_commands import VoiceCommandListener
 import cv2
 import numpy as np
 import math
@@ -30,9 +29,8 @@ class Button:
 
 
 class DrawingCanvas:
-    def __init__(self, voice: VoiceCommandListener, output_dir: str = "saved_drawings") -> None:
+    def __init__(self, output_dir: str = "saved_drawings") -> None:
         self.output_dir = Path(output_dir)
-        self.voice = voice
         self.output_dir.mkdir(exist_ok=True)
         self.width = 0
         self.height = 0
@@ -85,32 +83,27 @@ class DrawingCanvas:
 
     def undo(self) -> None:
         if not self.undo_stack:
-            self.voice.speak("Nothing to undo")
             return
         self.redo_stack.append((self.canvas.copy(), self.mask.copy()))
         prev_canvas, prev_mask = self.undo_stack.pop()
         self.canvas[:] = prev_canvas
         self.mask[:] = prev_mask
         self.prev_point = None
-        # self.voice.speak("Undo")
 
     def redo(self) -> None:
         if not self.redo_stack:
-            self.voice.speak("Nothing to redo")
             return
         self.undo_stack.append((self.canvas.copy(), self.mask.copy()))
         next_canvas, next_mask = self.redo_stack.pop()
         self.canvas[:] = next_canvas
         self.mask[:] = next_mask
         self.prev_point = None
-        self.voice.speak("Redo")
 
     def clear(self) -> None:
         self.save_undo_state()
         self.canvas[:] = 0
         self.mask[:] = 0
         self.prev_point = None
-        self.voice.speak("Board cleared")
 
     def draw(self, point: Point, thickness: int) -> None:
         if self.prev_point is None:
@@ -229,63 +222,6 @@ class DrawingCanvas:
                 return self._apply_action(button.action)
         return None
 
-    def apply_voice_command(self, command: str) -> Optional[str]:
-        command = command.lower()
-        if "clear" in command:
-            self.clear()
-            return "clear"
-        if "save" in command:
-            return self.save()
-        if "eraser" in command:
-            self.tool = "eraser"
-            self.voice.speak("Eraser mode")
-            return "eraser"
-        if "draw" in command:
-            self.tool = "pencil"
-            self.effect = "normal"
-            self.voice.speak("Drawing mode")
-            return "draw"
-        if 'rainbow' in command:
-            self.effect = "rainbow"
-            self.tool = "pencil"
-            self.voice.speak("Rainbow brush")
-            return "rainbow"
-        if 'neon' in command:
-            self.effect = "neon"
-            self.tool = "pencil"
-            self.voice.speak("Neon brush")
-            return "neon"
-        if 'sparkle' in command:
-            self.effect = "sparkle"
-            self.tool = "pencil"
-            self.voice.speak("Sparkle brush")
-            return "sparkle"
-        if 'fire' in command:
-            self.effect = "fire"
-            self.tool = "pencil"
-            self.voice.speak("Fire brush")
-            return "fire"
-        if 'glow' in command:
-            self.effect = "glow"
-            self.tool = "pencil"
-            self.voice.speak("Glow brush")
-            return "glow"
-        if command in {'red', 'green', 'blue', 'black', 'purple', 'orange'}:
-            self.color = self._color_actions()[command]
-            self.tool = "pencil"
-            self.effect = "normal"
-            self.voice.speak(f"{command.title()} selected")
-            return command
-        for name, color in self._color_actions().items():
-            if name in command:
-                self.color = color
-                self.tool = "pencil"
-                self.effect = "normal"
-                self.voice.speak(f"{name.title()} selected")
-                return name
-
-        return None
-
     def save(self) -> str:
         timestamp = datetime.now().strftime("%Y%m%d_%H%M%S")
         path = self.output_dir / f"drawing_{timestamp}.png"
@@ -293,7 +229,6 @@ class DrawingCanvas:
         active = self.mask > 0
         white[active] = self.canvas[active]
         cv2.imwrite(str(path), white)
-        self.voice.speak(f"Saved {path.name}")
         return str(path)
 
     def get_page_on_white(self) -> np.ndarray:
@@ -308,18 +243,14 @@ class DrawingCanvas:
             self.color = colors[action]
             self.effect = "normal"
             self.tool = "pencil"
-            self.voice.speak(f"{action.title()} selected")
         elif action in {"neon", "rainbow", "sparkle", "fire", "glow"}:
             self.effect = action
             self.tool = "pencil"
-            self.voice.speak(f"{action.title()} brush")
         elif action == "eraser":
             self.tool = "eraser"
-            self.voice.speak("Eraser selected")
         elif action == "draw":
             self.tool = "pencil"
             self.effect = "normal"
-            self.voice.speak("Drawing mode")
         elif action == "clear":
             self.clear()
         elif action == "save":

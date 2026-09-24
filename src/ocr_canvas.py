@@ -6,7 +6,6 @@ import time
 import cv2
 import numpy as np
 from .utils.path import resource_path
-from .voice_commands import VoiceCommandListener
 
 Point = Tuple[int, int]
 Color = Tuple[int, int, int]
@@ -22,9 +21,8 @@ class OCRResult:
 class OCRCanvas:
     """Dedicated UI for Handwriting OCR."""
 
-    def __init__(self, voice: VoiceCommandListener) -> None:
+    def __init__(self) -> None:
         self.width = 1280
-        self.voice = voice
         self.height = 720
         self.paper_rect = (0, 0, 0, 0)
         self.result_rect = (0, 0, 0, 0)
