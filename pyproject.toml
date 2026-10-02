@@ -4,6 +4,7 @@ version = "0.1.0"
 description = ""
 authors = ["Tohid Khan"]
 readme = "README.md"
+package-mode = false
 
 [[tool.poetry.source]]
 name = "pytorch-cpu"

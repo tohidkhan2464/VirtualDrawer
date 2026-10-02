@@ -4,15 +4,41 @@ Virtual Gesture Studio is a Python, OpenCV, and MediaPipe demo for drawing in th
 
 ## Install
 
-```powershell
+### Using Poetry
+
+Python 3.11 is required. Create and activate a virtual environment, then install Poetry and the project dependencies:
+
+```bash
+python3.11 -m venv .venv
+source .venv/bin/activate
+python -m pip install poetry
+poetry config virtualenvs.create false --local
+poetry install
+```
+
+The `virtualenvs.create false` setting makes Poetry install into the already activated `.venv` environment. The project uses the PyTorch CPU package source configured in `pyproject.toml`.
+
+### Using pip
+
+Create and activate a virtual environment before installing the dependencies:
+
+```bash
+python3.11 -m venv .venv
+source .venv/bin/activate
 python -m pip install -r requirements.txt
 ```
 
+For Windows PowerShell, activate the environment with `.venv\Scripts\Activate.ps1` instead.
+
+### Core dependencies only
+
 For a lighter install:
 
-```powershell
+```bash
 python -m pip install opencv-python mediapipe numpy
 ```
+
+The full `requirements.txt` install includes optional OCR, voice feedback, piano, and game features.
 
 ## Run
 
@@ -30,56 +56,6 @@ python main.py --camera 1
 
 | Gesture | Action |
 | --- | --- |
-| Index finger up | Draw |
-| Index + middle finger up | Move cursor |
-| Thumb + index pinch | Adjust brush size |
-| Open palm | Clear screen |
-| Fist | Pause drawing |
-
-Brush size changes only while the thumb + index resize gesture is active. When you return to drawing, the last selected brush size stays fixed. Use the toolbar to switch into eraser mode.
-
-## Toolbar
-
-Touch the virtual toolbar with your index finger to select:
-
-- Colors: red, green, blue, black
-- Effects: neon, rainbow, sparkle, fire, glow
-- Tools: eraser, save, OCR, piano, game, page controls
-
-## Keyboard Shortcuts
-
-| Key | Action |
-| --- | --- |
-| `q` or `Esc` | Quit |
-| `c` | Clear page |
-| `s` | Save current page |
-| `o` | OCR current page |
-| `v` | Listen for one voice command |
-| `p` | Toggle virtual piano |
-| `g` | Toggle Fruit Ninja mini game |
-| `n` | New page |
-| `[` / `]` | Previous / next page |
-
-## Voice Commands
-
-Voice commands are optional and require `SpeechRecognition` plus a working microphone setup. Supported phrases include:
-
-- "clear board"
-- "save image"
-- "change color red"
-- "change color blue"
-- "eraser mode"
-- "piano open"
-- "start game"
-
-## Project Structure
-
-```text
-VirtualGestureStudio/
-├── main.py
-├── hand_tracker.py
-├── gesture_detector.py
-├── drawing_board.py
 ├── handwriting_ocr.py
 ├── voice_commands.py
 ├── virtual_piano.py
